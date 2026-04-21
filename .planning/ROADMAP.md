@@ -21,7 +21,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] **Phase 4: Snowflake Adapter** - `sem__*.sql` via `dbt_semantic_view` package (HIGH RISK)
 - [ ] **Phase 5: Pre-Commit Hook** - `.pre-commit-hooks.yaml` triggering regeneration on YAML changes
 - [ ] **Phase 6: Databricks Adapter** - `sem__*.sql` via `dbt-databricks` metric view materialisation (alpha: 1.12.0a1)
-- [ ] **Phase 7: DuckDB Custom Materialisation** - Project-internal semantic view materialisation
+- [ ] **Phase 7: DuckDB Adapter** - `sem__*.sql` via `duckdb-semantic-views` extension
 - [ ] **Phase 8: v1 Release Hardening** - Docs, versioning, publish pipeline, final verification
 
 ## Phase Details
@@ -109,12 +109,12 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Plans**: TBD
 **Research flag**: MEDIUM — working against an alpha package (1.12.0a1); verify metric view DDL config schema before planning.
 
-### Phase 7: DuckDB Custom Materialisation
-**Goal**: DuckDB users (local dev, test) can materialise semantic models end-to-end without waiting for an upstream adapter package
+### Phase 7: DuckDB Adapter
+**Goal**: DuckDB users (local dev, test) can materialise semantic models via the `duckdb-semantic-views` extension, using the same adapter-dispatch pattern as Snowflake
 **Depends on**: Phase 4 (shares adapter dispatch)
 **Requirements**: SEMVW-04
 **Success Criteria** (what must be TRUE):
-  1. A project-internal custom materialisation is shipped that accepts the same dimensions/measures/entities inputs as the Snowflake path
+  1. For each `semantic_model`, a `sem__<name>.sql` file is generated that invokes the `duckdb-semantic-views` extension materialisation
   2. `dbt run --target duckdb` on a fixture project materialises every `sem__*.sql` as a queryable DuckDB semantic view
   3. The same semantic YAML produces working output on both Snowflake and DuckDB with only a `--target` flag change
 **Plans**: TBD
