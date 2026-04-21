@@ -1,4 +1,5 @@
-"""Environment diagnostics for dbt-s-layer.
+"""
+Environment diagnostics for dbt-s-layer.
 
 Phase 0 scope (per CONTEXT.md):
 - Detects `dbtf` (dbt Fusion) binary on PATH via `shutil.which`
@@ -18,7 +19,8 @@ FUSION_INSTALL_URL = "https://docs.getdbt.com/docs/fusion/install-fusion"
 
 
 def run_doctor() -> int:
-    """Report environment diagnostics and return an exit code.
+    """
+    Report environment diagnostics and return an exit code.
 
     Exit codes:
         0 - all checks passed (dbtf on PATH AND metricflow importable)
@@ -41,7 +43,10 @@ def run_doctor() -> int:
         mf_version = version("metricflow")
         print(f"OK  metricflow version: {mf_version}", file=sys.stdout)
     except PackageNotFoundError:
-        print("ERROR: metricflow is not installed (dbt-s-layer install is broken).", file=sys.stdout)
+        print(
+            "ERROR: metricflow is not installed (dbt-s-layer install is broken).",
+            file=sys.stdout,
+        )
         exit_code = max(exit_code, 2)
 
     return exit_code
