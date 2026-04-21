@@ -71,6 +71,17 @@ Repo scaffold, license-clean CI, stack verification spike, and a minimal `doctor
 - Must probe: Pydantic v1 vs v2 in metricflow, `SqlTable.from_string` module path, `PydanticSemanticManifest` import path
 - Output: pinned versions committed to `pyproject.toml`
 
+### CI Python Matrix
+- Matrix: 3.11, 3.12, 3.13, 3.14 (full matrix — no scaffold-only leg)
+- metricflow 0.209.0 caps at `<3.13`; override via:
+  ```toml
+  [tool.uv]
+  override-dependencies = [
+      "metricflow; python_version >=3.10, <3.14"
+  ]
+  ```
+- This matches the upcoming metricflow PR #2020 which widens the cap — override is intentional and temporary until that releases
+
 ### Testing
 - `pytest` ≥ 8, `pytest-cov` ≥ 6
 - `tests/` with `__init__.py`, `conftest.py`, `test_dbt_s_layer.py`
