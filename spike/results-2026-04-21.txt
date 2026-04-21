@@ -1,0 +1,26 @@
+============================================================
+dbt-s-layer Phase 0 stack verification spike
+============================================================
+Python: 3.11.7 (main, Dec 20 2023, 16:02:40) [Clang 15.0.0 (clang-1500.0.40.1)]
+
+--- Resolved package versions ---
+  metricflow: 0.209.0
+  metricflow-semantics: NOT INSTALLED
+  dbt-semantic-interfaces: 0.9.4.dev0
+  pydantic: 2.13.3
+
+--- Import-surface checks ---
+  PydanticSemanticManifest: OK -> <class 'dbt_semantic_interfaces.implementations.semantic_manifest.PydanticSemanticManifest'>
+  SqlTable: OK -> <class 'metricflow_semantics.sql.sql_table.SqlTable'>
+  SqlTable.from_string: OK -> <function SqlTable.from_string at 0x1050e4360>
+
+--- Pydantic v1 vs v2 shape ---
+  pydantic.VERSION: 2.13.3
+  manifest uses pydantic-v2 API (model_fields): False
+  manifest uses pydantic-v1 API (__fields__):   True
+  DECISION: dbt-s-layer must import via `from pydantic.v1 import ...`
+
+============================================================
+Spike exit code: 1
+============================================================
+Spike exit code: 1
