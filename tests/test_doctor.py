@@ -12,13 +12,29 @@ if TYPE_CHECKING:
     import pytest
 
 
+def _which_found(_name: str) -> str | None:
+    return "/fake/path/dbtf"
+
+
+def _which_missing(_name: str) -> str | None:
+    return None
+
+
+def _version_ok(_name: str) -> str:
+    return "0.209.0"
+
+
+def _version_missing(name: str) -> str:
+    raise PackageNotFoundError(name)
+
+
 def test_doctor_all_ok(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     """Returns 0 and prints version when both dbtf and metricflow are present."""
-    monkeypatch.setattr(_doctor.shutil, "which", lambda _: "/fake/path/dbtf")
-    monkeypatch.setattr(_doctor, "version", lambda _: "0.209.0")
+    monkeypatch.setattr(_doctor.shutil, "which", _which_found)
+    monkeypatch.setattr(_doctor, "version", _version_ok)
 
     code = run_doctor()
 
@@ -34,8 +50,8 @@ def test_doctor_dbtf_missing(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     """Returns 1 and prints Fusion install URL when dbtf is not on PATH."""
-    monkeypatch.setattr(_doctor.shutil, "which", lambda _: None)
-    monkeypatch.setattr(_doctor, "version", lambda _: "0.209.0")
+    monkeypatch.setattr(_doctor.shutil, "which", _which_missing)
+    monkeypatch.setattr(_doctor, "version", _version_ok)
 
     code = run_doctor()
 
@@ -50,12 +66,8 @@ def test_doctor_metricflow_missing(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     """Returns 2 when metricflow package metadata cannot be read."""
-    monkeypatch.setattr(_doctor.shutil, "which", lambda _: "/fake/path/dbtf")
-
-    def _raise(name: str) -> str:
-        raise PackageNotFoundError(name)
-
-    monkeypatch.setattr(_doctor, "version", _raise)
+    monkeypatch.setattr(_doctor.shutil, "which", _which_found)
+    monkeypatch.setattr(_doctor, "version", _version_missing)
 
     code = run_doctor()
 
@@ -70,12 +82,8 @@ def test_doctor_all_missing(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     """Returns 2 (highest severity) when both dbtf and metricflow are missing."""
-    monkeypatch.setattr(_doctor.shutil, "which", lambda _: None)
-
-    def _raise(name: str) -> str:
-        raise PackageNotFoundError(name)
-
-    monkeypatch.setattr(_doctor, "version", _raise)
+    monkeypatch.setattr(_doctor.shutil, "which", _which_missing)
+    monkeypatch.setattr(_doctor, "version", _version_missing)
 
     code = run_doctor()
 

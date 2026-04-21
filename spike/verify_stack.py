@@ -1,4 +1,5 @@
-"""Stack verification spike for dbt-s-layer Phase 0.
+"""
+Stack verification spike for dbt-s-layer Phase 0.
 
 Run: uv run python spike/verify_stack.py
 Commits a snapshot of what Phase 0 found so later phases can trust pins.
@@ -21,7 +22,8 @@ import sys
 
 
 def probe() -> int:
-    """Report resolved versions and internal import paths we depend on.
+    """
+    Report resolved versions and internal import paths we depend on.
 
     Returns:
         0 if all probes succeed, non-zero if any critical import fails.
@@ -49,6 +51,7 @@ def probe() -> int:
         from dbt_semantic_interfaces.implementations.semantic_manifest import (
             PydanticSemanticManifest,
         )
+
         print(f"  PydanticSemanticManifest: OK -> {PydanticSemanticManifest!r}")
     except ImportError as exc:
         print(f"  PydanticSemanticManifest: FAIL -> {exc}")
@@ -57,6 +60,7 @@ def probe() -> int:
 
     try:
         from metricflow_semantics.sql.sql_table import SqlTable
+
         print(f"  SqlTable: OK -> {SqlTable!r}")
         print(f"  SqlTable.from_string: OK -> {SqlTable.from_string!r}")
     except ImportError as exc:
@@ -67,6 +71,7 @@ def probe() -> int:
     print("--- Pydantic v1 vs v2 shape ---")
     try:
         import pydantic
+
         print(f"  pydantic.VERSION: {pydantic.VERSION}")
     except ImportError as exc:
         print(f"  pydantic: FAIL -> {exc}")
