@@ -61,7 +61,7 @@ The project targets two pain points for dbt Core users:
 - **Runtime:** Python package (pip-installable); requires dbt Fusion binary on `PATH` for new-spec projects
 - **License:** Must not embed ELv2-licensed code (Fusion crates). Subprocess invocation of the binary is permissible. Apache-2.0 / MIT for this package.
 - **dbt compatibility:** dbt Core ≥ 1.7 (semantic models GA); dbt Fusion (any version)
-- **Warehouse targets v1:** Snowflake (full), Databricks (stub, awaiting upstream package), DuckDB (custom materialisation)
+- **Warehouse targets v1:** Snowflake (full), Databricks (alpha: `dbt-databricks==1.12.0a1`, PR databricks/dbt-databricks#1285), DuckDB (custom materialisation)
 
 ## Key Decisions
 

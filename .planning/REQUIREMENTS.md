@@ -23,7 +23,7 @@
 
 - [ ] **SEMVW-01**: Tool generates one `sem__<semantic_model_name>.sql` dbt model for each `semantic_model`, containing the DDL or materialisation call for the target warehouse's native semantic object type
 - [ ] **SEMVW-02**: Generated semantic view models for Snowflake target use the `dbt_semantic_view` package (Snowflake-Labs) materialisation, with entities, dimensions, and measures derived from the semantic model YAML
-- [ ] **SEMVW-03**: Generated semantic view models for Databricks target emit a warning and produce no output file until the upstream Databricks metric view dbt package is available
+- [ ] **SEMVW-03**: Generated semantic view models for Databricks target use the `dbt-databricks` metric view materialisation (alpha: `dbt-databricks==1.12.0a1`, PR databricks/dbt-databricks#1285), with entities, dimensions, and measures derived from the semantic model YAML
 - [ ] **SEMVW-04**: Generated semantic view models for DuckDB target use a project-internal custom materialisation
 - [ ] **SEMVW-05**: Generated semantic view models include explicit `{{ ref() }}` and `{{ source() }}` calls for all upstream dbt nodes, so dbt's DAG parser registers correct lineage edges
 
