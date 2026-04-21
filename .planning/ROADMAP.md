@@ -32,11 +32,15 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Requirements**: CLI-03
 **Success Criteria** (what must be TRUE):
   1. `uv run pytest` passes on an empty test suite in a freshly cloned repo
-  2. CI runs ruff, mypy, pytest, and a license scan that fails on any ELv2-licensed dependency
+  2. CI runs ruff, basedpyright, and pytest (NO license scan — superseded by CONTEXT.md; ELv2 risk is architectural, not a dep-tree problem)
   3. `dbt-s-layer --help` and `dbt-s-layer doctor --help` print usage from a pip-installed build
   4. `dbt-s-layer doctor` detects presence/absence of the `dbtf` binary and reports the installed metricflow version
   5. Pinned versions for `metricflow`, `metricflow-semantics`, and `dbt-semantic-interfaces` are committed after the stack verification spike confirms Pydantic v1/v2 status
-**Plans**: TBD
+**Plans**: 4 plans
+  - [ ] 00-01-PLAN.md — Package scaffold: pyproject.toml (uv_build, dev deps, scripts entrypoint), src/dbt_s_layer/ with py.typed, tests/ smoke, LICENSE, README (Wave 1)
+  - [ ] 00-02-PLAN.md — CLI + doctor command: Typer app, _doctor.py (shutil.which + importlib.metadata), CliRunner tests [CLI-03] (Wave 2)
+  - [ ] 00-03-PLAN.md — Stack verification spike + metricflow family pinning in pyproject.toml, [tool.uv] override-dependencies (Wave 2)
+  - [ ] 00-04-PLAN.md — .pre-commit-config.yaml + 4 GitHub Actions workflows (ci/quality/release/weekly) on 3.11/3.12/3.13/3.14 matrix (Wave 3)
 
 ### Phase 1: Parsing Pipeline
 **Goal**: A Python pipeline that loads `semantic_manifest.json` + `manifest.json` from any dbt project and produces typed internal models plus a fully-resolved ref/source sentinel map
@@ -137,7 +141,7 @@ Phases execute in numeric order: 0 → 1 → 2 → 3 → 4 → 5 → 6 → 7 →
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 0. Foundation & Governance | 0/TBD | Not started | - |
+| 0. Foundation & Governance | 0/4 | Not started | - |
 | 1. Parsing Pipeline | 0/TBD | Not started | - |
 | 2. Export SQL Generation | 0/TBD | Not started | - |
 | 3. File Output + CLI | 0/TBD | Not started | - |
