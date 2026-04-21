@@ -1,0 +1,54 @@
+[project]
+name = "dbt-s-layer"
+version = "0.1.0"
+description = "dbt Cloud semantic-layer features for dbt Core / Fusion users"
+readme = "README.md"
+license = "Apache-2.0"
+authors = [
+    { name = "paul", email = "ego@anentropic.com" }
+]
+requires-python = ">=3.11"
+dependencies = [
+    "typer>=0.24.1",
+    # metricflow family pins added by Plan 03 (spike) — do NOT add them here
+]
+
+[project.scripts]
+dbt-s-layer = "dbt_s_layer.cli:app"
+
+[build-system]
+requires = ["uv_build>=0.9.18,<1.0.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "basedpyright>=1.38.0",
+    "pytest>=8.0.0",
+    "pytest-cov>=6.0.0",
+    "ruff>=0.15.1",
+]
+
+[tool.pyright]
+pythonVersion = "3.11"
+typeCheckingMode = "strict"
+include = ["src", "tests"]
+reportPrivateUsage = false
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+src = ["src"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "TCH", "D"]
+ignore = [
+    "D1",    # don't require docstrings everywhere
+    "D202",  # allow blank line after docstring
+    "D203",  # conflicts with D211
+    "D212",  # conflicts with D213 (multiline summary on second line)
+    "D401",  # imperative mood awkward for dunder methods
+    "D413",  # blank line after last section not required
+]
+
+[tool.pytest.ini_options]
+addopts = "-v"
