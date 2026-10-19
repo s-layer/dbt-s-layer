@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import os
+import shutil
 import subprocess
 from collections.abc import Callable
 from importlib.metadata import PackageNotFoundError
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -17,6 +20,11 @@ from dbt_s_layer._doctor import (
     parse_engine_version,
     run_doctor,
 )
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from tests.conftest import MakeProject
 
 # Real `--version` output, captured 2026-10-19 from the builds named.
 FUSION_STABLE_OUTPUT = "dbt 2.0.8\n"  # stable/latest channel
@@ -380,3 +388,91 @@ def test_doctor_all_missing(
     assert code == 2
     assert FUSION_INSTALL_URL in out
     assert "metricflow" in out
+
+
+# --- doctor --project-dir (CLI-05, CLI-03 Phase 1) ---------------------------
+
+
+def _engines_ok(monkeypatch: pytest.MonkeyPatch) -> None:
+    _patch(monkeypatch, {"dbt": "/c/dbt"}, {"/c/dbt": CORE_OUTPUT})
+    monkeypatch.setattr(_doctor, "version", _metricflow_ok)
+
+
+def test_doctor_without_project_dir_skips_artifact_checks(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _engines_ok(monkeypatch)
+    assert run_doctor() == 0
+    assert "artifacts" not in capsys.readouterr().out
+
+
+def test_doctor_project_fresh(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    make_project: MakeProject,
+) -> None:
+    _engines_ok(monkeypatch)
+    assert run_doctor(make_project("core_legacy")) == 0
+    out = capsys.readouterr().out
+    assert "OK  artifacts: fresh (dbt Core 1.12.6)" in out
+    assert "WARN" not in out
+
+
+def test_doctor_project_fresh_with_warning_exits_zero(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    make_project: MakeProject,
+) -> None:
+    _engines_ok(monkeypatch)
+    assert run_doctor(make_project("core_new")) == 0
+    out = capsys.readouterr().out
+    assert "OK  artifacts: fresh (dbt Core 1.12.6)" in out
+    assert "WARN semantic model 'customers'" in out
+
+
+def test_doctor_project_stale(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    make_project: MakeProject,
+) -> None:
+    _engines_ok(monkeypatch)
+    project_dir = make_project("core_legacy")
+    mtime = (project_dir / "target" / "semantic_manifest.json").stat().st_mtime + 10
+    os.utime(project_dir / "models/marts/orders.yml", (mtime, mtime))
+    assert run_doctor(project_dir) == 1
+    out = capsys.readouterr().out
+    assert "ERROR artifacts:" in out
+    assert "models/marts/orders.yml" in out
+    assert "OK  artifacts" not in out
+
+
+def test_doctor_project_missing_artifacts(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    make_project: MakeProject,
+) -> None:
+    _engines_ok(monkeypatch)
+    project_dir = make_project("core_new")
+    shutil.rmtree(project_dir / "target")
+    assert run_doctor(project_dir) == 1
+    out = capsys.readouterr().out
+    assert "ERROR artifacts:" in out
+    assert "`dbt parse`" in out
+
+
+def test_doctor_not_a_project(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    _engines_ok(monkeypatch)
+    assert run_doctor(tmp_path) == 1
+    assert "not a dbt project" in capsys.readouterr().out
+
+
+def test_doctor_project_error_keeps_metricflow_severity(
+    monkeypatch: pytest.MonkeyPatch, make_project: MakeProject
+) -> None:
+    _patch(monkeypatch, {"dbt": "/c/dbt"}, {"/c/dbt": CORE_OUTPUT})
+    monkeypatch.setattr(_doctor, "version", _metricflow_missing)
+    project_dir = make_project("core_new")
+    shutil.rmtree(project_dir / "target")
+    assert run_doctor(project_dir) == 2
