@@ -16,7 +16,8 @@
 - Skipped with one warning each: cumulative, conversion, metric and input-measure filters,
   `window_groupings`, natural entities, approximate discrete percentiles, derived/ratio metrics
   that do not fit. `fill_nulls_with`/`join_to_timespine` warn but keep the metric. A metric named
-  like a dimension of its semantic model raises `SemanticViewError` (new).
+  like a dimension of its semantic model raises `SemanticViewError` (new). (Review round 1: `generate` now skips that
+  view with a WARN instead of stopping; see 04-03-SUMMARY.md.)
 - Found while testing: metricflow rewrites `count` and `sum_boolean` to `sum` of a `CASE`, and
   `median` to `percentile` 0.5, before dbt-s-layer sees them; metricflow's validator forbids an
   entity and a dimension sharing a name anywhere in the project, so the planned "dimension wins

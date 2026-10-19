@@ -32,3 +32,9 @@
   condition is already implied: metricflow rejects a semantic manifest with no semantic models
   ("No semantic models present in the model."), so doctor reports the artifacts as an ERROR and
   never reaches the package check.
+- A `SemanticViewError` from one semantic model (name shadowing, a metric named like a
+  dimension, a view with no dimension or metric) no longer aborts `generate`/`check`.
+  `render_semantic_views` builds and renders each view on its own; a failing one is left out
+  with the warning `semantic views: skipped sem__<name>: <the error's message>`, and the exports
+  and the other views are generated. `build_semantic_views` and `render_snowflake` still raise,
+  for direct callers. README updated: such a model is skipped with a WARN, not refused.

@@ -628,7 +628,12 @@ class SemanticViewResult:
 
 
 def render_semantic_views(project: SemanticProject, *, adapter: str) -> SemanticViewResult:
-    """Render a semantic view model per semantic model for `adapter`, or warn it has none yet."""
+    """
+    Render a semantic view model per semantic model for `adapter`, or warn it has none yet.
+
+    A semantic model whose view cannot be built (`SemanticViewError`) is left out
+    with a warning naming the view and the reason; the other views still render.
+    """
     from dbt_s_layer import snowflake
 
     if not project.semantic_manifest.semantic_models:
@@ -643,19 +648,29 @@ def render_semantic_views(project: SemanticProject, *, adapter: str) -> Semantic
                 "were generated.",
             ),
         )
-    build = build_semantic_views(project)
-    models = tuple(
-        SemanticViewModel(
-            semantic_model=view.name,
-            file_name=f"sem__{view.name}.sql",
-            alias=f"sem__{view.name}",
-            schema=None,
-            description=view.comment,
-            body=render(view),
+    builder = _Builder(project)
+    models: list[SemanticViewModel] = []
+    skipped: list[str] = []
+    for name in sorted(builder.models):
+        # One semantic model Snowflake cannot hold must not stop the others, or the exports.
+        try:
+            view = builder.view(name)
+            body = render(view)
+        except SemanticViewError as exc:
+            reason = str(exc).removeprefix(f"sem__{name}: ")
+            skipped.append(f"semantic views: skipped sem__{name}: {reason}")
+            continue
+        models.append(
+            SemanticViewModel(
+                semantic_model=view.name,
+                file_name=f"sem__{view.name}.sql",
+                alias=f"sem__{view.name}",
+                schema=None,
+                description=view.comment,
+                body=body,
+            )
         )
-        for view in build.views
-    )
-    warnings = set(build.warnings)
+    warnings = {*builder.warnings, *skipped}
     if (
         adapter == "snowflake"
         and snowflake.MATERIALIZATION_MACRO not in project.dbt_manifest.macros
@@ -665,4 +680,4 @@ def render_semantic_views(project: SemanticProject, *, adapter: str) -> Semantic
             f"has no {snowflake.MATERIALIZATION_MACRO}). Add Snowflake-Labs/{snowflake.PACKAGE} "
             "to packages.yml and run `dbt deps`; until then `dbt run` fails on the sem__ models."
         )
-    return SemanticViewResult(models=models, warnings=tuple(sorted(warnings)))
+    return SemanticViewResult(models=tuple(models), warnings=tuple(sorted(warnings)))

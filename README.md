@@ -109,10 +109,12 @@ METRICS (
 - **Descriptions** become `COMMENT`s. Names that are Snowflake keywords (`order`, `group`) are
   written as upper-case quoted identifiers, which name the same thing.
 
-dbt-s-layer refuses a semantic model where Snowflake would read an expression differently from
-MetricFlow: Snowflake resolves a bare name to a dimension or metric of the view before a column,
-so a dimension `amount AS amount * 100` would change a metric `SUM(amount)`. Rename the dimension,
-or make its `expr` exactly its column.
+dbt-s-layer skips the semantic view of a semantic model where Snowflake would read an expression
+differently from MetricFlow: Snowflake resolves a bare name to a dimension or metric of the view
+before a column, so a dimension `amount AS amount * 100` would change a metric `SUM(amount)`.
+`generate` prints a `WARN semantic views: skipped sem__<name>: ...` line saying why, and writes
+the exports and the other views as usual. Rename the dimension, or make its `expr` exactly its
+column. A metric named like a dimension of its semantic model is skipped the same way.
 
 ### Install the package
 
