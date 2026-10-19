@@ -324,7 +324,7 @@ def _not_a_column(tokens: list[SqlToken], i: int, calls: list[tuple[str, int]]) 
     return False
 
 
-def _references(expr: str, table: str) -> set[str]:
+def column_references(expr: str, table: str) -> set[str]:
     """
     Lower-cased names `expr` may resolve against `table`'s own elements.
 
@@ -396,7 +396,7 @@ def check_name_shadowing(spec: SemanticViewSpec) -> None:
             for other_kind, other, other_expr, shown in elements:
                 if other == name and other_kind == kind:
                     continue
-                if name.lower() in _references(other_expr, table.alias):
+                if name.lower() in column_references(other_expr, table.alias):
                     raise SemanticViewError(
                         f"sem__{spec.name}: {kind} {table.alias}.{name} ({expr!r}) has the "
                         f"name of a column that {other_kind} {table.alias}.{other} uses "

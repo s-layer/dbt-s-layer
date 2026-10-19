@@ -24,7 +24,7 @@ from dbt_s_layer.refs import build_ref_map
 from dbt_s_layer.sentinels import render_ref
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Mapping
+    from collections.abc import Callable, Iterable, Mapping
 
     from metricflow_semantic_interfaces.implementations.metric import (
         PydanticMetric,
@@ -166,6 +166,14 @@ class SemanticViewSpec:
     metrics: tuple[MetricSpec, ...] = ()
     derived_metrics: tuple[DerivedMetricSpec, ...] = ()
     comment: str | None = None
+
+
+@dataclass(frozen=True)
+class RenderedView:
+    """A semantic view rendered for one adapter, and what that adapter left out of it."""
+
+    body: str
+    warnings: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -668,8 +676,11 @@ class SemanticViewModel:
     # Generated models set no schema: the output folder's `+schema` applies.
     schema: str | None
     description: str | None
-    # `{{ config(...) }}`, a blank line, the clauses, and a final newline.
+    # `{{ config(...) }}`, a blank line, the definition, and a final newline.
     body: str
+    # How the body's language starts a line comment, for the ownership header: SQL's
+    # `--`, or `#` where the body is YAML (Databricks).
+    comment_prefix: str = "--"
 
 
 @dataclass(frozen=True)
@@ -687,11 +698,19 @@ def render_semantic_views(project: SemanticProject, *, adapter: str) -> Semantic
     A semantic model whose view cannot be built (`SemanticViewError`) is left out
     with a warning naming the view and the reason; the other views still render.
     """
-    from dbt_s_layer import snowflake
+    from dbt_s_layer import databricks, snowflake
 
     if not project.semantic_manifest.semantic_models:
         return SemanticViewResult(models=(), warnings=())
-    renderers = {"snowflake": snowflake.render_snowflake}
+
+    def render_snowflake(spec: SemanticViewSpec) -> RenderedView:
+        return RenderedView(body=snowflake.render_snowflake(spec))
+
+    renderers: dict[str, Callable[[SemanticViewSpec], RenderedView]] = {
+        "snowflake": render_snowflake,
+        "databricks": databricks.render_databricks,
+    }
+    comment_prefix = "#" if adapter == "databricks" else "--"
     render = renderers.get(adapter)
     if render is None:
         return SemanticViewResult(
@@ -708,13 +727,14 @@ def render_semantic_views(project: SemanticProject, *, adapter: str) -> Semantic
         # One semantic model Snowflake cannot hold must not stop the others, or the exports.
         try:
             view, view_warnings = builder.view(name)
-            body = render(view)
+            rendered = render(view)
         except SemanticViewError as exc:
             # Only the skip is reported: the view's own warnings describe a view not written.
             reason = str(exc).removeprefix(f"sem__{name}: ")
             warnings.add(f"semantic views: skipped sem__{name}: {reason}")
             continue
         warnings |= view_warnings
+        warnings.update(rendered.warnings)
         models.append(
             SemanticViewModel(
                 semantic_model=view.name,
@@ -722,7 +742,8 @@ def render_semantic_views(project: SemanticProject, *, adapter: str) -> Semantic
                 alias=f"sem__{view.name}",
                 schema=None,
                 description=view.comment,
-                body=body,
+                body=rendered.body,
+                comment_prefix=comment_prefix,
             )
         )
     if (
@@ -733,5 +754,14 @@ def render_semantic_views(project: SemanticProject, *, adapter: str) -> Semantic
             f"semantic views: the {snowflake.PACKAGE} package is not installed (manifest.json "
             f"has no {snowflake.MATERIALIZATION_MACRO}). Add Snowflake-Labs/{snowflake.PACKAGE} "
             "to packages.yml and run `dbt deps`; until then `dbt run` fails on the sem__ models."
+        )
+    if (
+        adapter == "databricks"
+        and databricks.MATERIALIZATION_MACRO not in project.dbt_manifest.macros
+    ):
+        warnings.add(
+            "semantic views: dbt-databricks has no metric_view materialization (manifest.json "
+            f"has no {databricks.MATERIALIZATION_MACRO}). Install dbt-databricks >= 1.12.0; "
+            "until then `dbt run` fails on the sem__ models."
         )
     return SemanticViewResult(models=tuple(models), warnings=tuple(sorted(warnings)))

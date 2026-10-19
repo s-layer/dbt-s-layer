@@ -176,6 +176,17 @@ def _check_project(project_dir: Path) -> int:
                 "`dbt deps`.",
                 file=sys.stdout,
             )
+    if manifest.metadata.adapter_type == "databricks":
+        from dbt_s_layer import databricks
+
+        if databricks.MATERIALIZATION_MACRO in manifest.macros:
+            print("OK  dbt-databricks metric views: installed", file=sys.stdout)
+        else:
+            print(
+                "WARN dbt-databricks metric views: no metric_view materialization, so `dbt run` "
+                "fails on the generated sem__ models. Install dbt-databricks >= 1.12.0.",
+                file=sys.stdout,
+            )
     return 0
 
 

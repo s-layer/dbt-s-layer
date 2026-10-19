@@ -79,14 +79,19 @@ def _body(spec: SemanticViewSpec) -> str:
     return _render(spec).body.removeprefix(CONFIG + "\n\n")
 
 
+def _no_config(**_: object) -> str:
+    return ""
+
+
+def _ref(*args: str, **_: object) -> str:
+    return f"`main`.`marts`.`{args[-1]}`"
+
+
 def _load(body: str) -> Any:
     """The definition Databricks receives: Jinja rendered as dbt would, then YAML."""
     environment = jinja2.Environment(autoescape=False)
-    text = environment.from_string(body).render(
-        config=lambda **_: "",
-        ref=lambda *args, **_: f"`main`.`marts`.`{args[-1]}`",
-    )
-    return YAML(typ="safe", pure=True).load(StringIO(text))
+    text = environment.from_string(body).render(config=_no_config, ref=_ref)
+    return YAML(typ="safe", pure=True).load(StringIO(text))  # pyright: ignore[reportUnknownMemberType]
 
 
 # --- the definition ------------------------------------------------------------
