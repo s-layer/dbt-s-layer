@@ -70,10 +70,12 @@ def _files(make_project: MakeProject, set_name: str = "core_export") -> dict[str
 
 
 def _snapshot(directory: Path) -> dict[str, tuple[bytes, int]]:
-    return {
-        str(p.relative_to(directory)): (p.read_bytes() if p.is_file() else b"", p.stat().st_mtime_ns)
-        for p in sorted(directory.rglob("*"))
-    }
+    """Every path under `directory` with its content (files) and mtime."""
+    snapshot: dict[str, tuple[bytes, int]] = {}
+    for path in sorted(directory.rglob("*")):
+        content = path.read_bytes() if path.is_file() else b""
+        snapshot[str(path.relative_to(directory))] = (content, path.stat().st_mtime_ns)
+    return snapshot
 
 
 # --- render -------------------------------------------------------------------
@@ -146,9 +148,9 @@ def test_rendering_is_byte_stable(set_name: str, make_project: MakeProject) -> N
 def test_adapter_is_passed_through(make_project: MakeProject) -> None:
     project = load_project(make_project("core_export"))
     duckdb = render_output(project)
-    snowflake = render_output(project, adapter="snowflake")
-    assert duckdb[SCHEMA_FILE] == snowflake[SCHEMA_FILE]
-    assert duckdb != snowflake
+    bigquery = render_output(project, adapter="bigquery")
+    assert duckdb[SCHEMA_FILE] == bigquery[SCHEMA_FILE]
+    assert duckdb != bigquery
 
 
 # --- apply --------------------------------------------------------------------
@@ -348,9 +350,10 @@ def test_diff_refuses_hand_written_owned_files(make_project: MakeProject, tmp_pa
 
 
 def test_output_dir_that_is_a_file(make_project: MakeProject, tmp_path: Path) -> None:
+    files = _files(make_project)
     out = tmp_path / "out"
     out.write_text("")
     with pytest.raises(OutputConflictError, match="not a directory"):
-        apply_output(_files(make_project), out)
+        apply_output(files, out)
     with pytest.raises(OutputConflictError, match="not a directory"):
-        diff_output(_files(make_project), out)
+        diff_output(files, out)

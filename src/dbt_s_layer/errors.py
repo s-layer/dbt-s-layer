@@ -38,3 +38,7 @@ class SentinelCollisionError(DbtSLayerError):
 
 class ExportRenderError(DbtSLayerError):
     """An export's SQL could not be rendered into a dbt model."""
+
+
+class OutputConflictError(DbtSLayerError):
+    """The output directory holds a file dbt-s-layer would overwrite but did not generate."""
