@@ -269,7 +269,7 @@ def run_doctor(project_dir: Path | None = None, output_dir: Path | None = None) 
             )
 
     if project_dir is not None or output_dir is not None:
-        from dbt_s_layer._commands import DEFAULT_OUTPUT_DIR, resolve_output_dir
+        from dbt_s_layer._paths import DEFAULT_OUTPUT_DIR, resolve_output_dir
 
         base = project_dir if project_dir is not None else Path.cwd()
         resolved = resolve_output_dir(base.resolve(), output_dir or DEFAULT_OUTPUT_DIR)

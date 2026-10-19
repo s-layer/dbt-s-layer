@@ -10,19 +10,18 @@ from __future__ import annotations
 
 import sys
 from dataclasses import dataclass
-from pathlib import Path
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
-from dbt_s_layer.artifacts import read_dbt_project
+from dbt_s_layer._paths import resolve_output_dir
 from dbt_s_layer.errors import DbtSLayerError
-from dbt_s_layer.output import apply_output, diff_output, render_output
+from dbt_s_layer.output import apply_output, diff_output, project_model_paths, render_output
 from dbt_s_layer.profiles import adapter_for_target
 from dbt_s_layer.staleness import check_artifacts
 
 if TYPE_CHECKING:
-    from dbt_s_layer.output import OutputDiff
+    from pathlib import Path
 
-DEFAULT_OUTPUT_DIR = Path("models") / "semantic"
+    from dbt_s_layer.output import OutputDiff
 
 
 @dataclass(frozen=True)
@@ -44,24 +43,13 @@ def _err(message: str) -> None:
     print(message, file=sys.stderr)
 
 
-def resolve_output_dir(project_dir: Path, output_dir: Path) -> Path:
-    """A relative output directory is relative to the project, like dbt's own paths."""
-    return (project_dir / output_dir).resolve()
-
-
-def _model_paths(project_dir: Path) -> list[Path]:
-    value = read_dbt_project(project_dir).get("model-paths")
-    paths = [str(p) for p in cast("list[object]", value)] if isinstance(value, list) else []
-    return [(project_dir / p).resolve() for p in paths or ["models"]]
-
-
 def _render(options: Options) -> tuple[dict[str, str], Path]:
     checked = check_artifacts(options.project_dir)
     for warning in checked.warnings:
         _err(f"WARN {warning}")
     project = checked.project
     output_dir = resolve_output_dir(project.project_dir, options.output_dir)
-    model_paths = _model_paths(project.project_dir)
+    model_paths = project_model_paths(project.project_dir)
     if not any(output_dir.is_relative_to(p) for p in model_paths):
         shown = ", ".join(str(p) for p in model_paths)
         _err(

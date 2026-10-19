@@ -14,10 +14,11 @@ import shutil
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from ruamel.yaml import YAML
 
+from dbt_s_layer.artifacts import read_dbt_project
 from dbt_s_layer.errors import ModelClashError, OutputConflictError
 from dbt_s_layer.exports import render_exports
 
@@ -90,6 +91,50 @@ def _relation_key(schema: str | None, alias: str) -> tuple[str | None, str]:
     return (schema.lower() if schema is not None else None, alias.lower())
 
 
+# A folder-level schema dbt-s-layer cannot resolve (Jinja).
+_UNKNOWN = object()
+
+
+def project_model_paths(project_dir: Path) -> list[Path]:
+    """The project's `model-paths`, resolved."""
+    value = read_dbt_project(project_dir).get("model-paths")
+    paths = [str(p) for p in cast("list[object]", value)] if isinstance(value, list) else []
+    return [(project_dir / p).resolve() for p in paths or ["models"]]
+
+
+def _as_mapping(value: object) -> dict[str, object]:
+    if not isinstance(value, dict):
+        return {}
+    return {str(k): v for k, v in cast("dict[object, object]", value).items()}
+
+
+def _folder_schema(project: SemanticProject, output_dir: Path) -> object:
+    """
+    The `+schema` dbt_project.yml gives models in `output_dir`: a str, None, or _UNKNOWN.
+
+    Exports without a schema of their own leave it out of `config()`, so dbt
+    applies the folder's. The deepest setting wins, as in dbt.
+    """
+    root = project.dbt_manifest.metadata.project_name
+    levels = [_as_mapping(read_dbt_project(project.project_dir).get("models"))]
+    levels.append(_as_mapping(levels[0].get(root)))
+    for model_path in project_model_paths(project.project_dir):
+        if output_dir.is_relative_to(model_path):
+            for part in output_dir.relative_to(model_path).parts:
+                levels.append(_as_mapping(levels[-1].get(part)))
+            break
+    schema: object = None
+    for level in levels:
+        for key in ("schema", "+schema"):
+            if key in level:
+                schema = level[key]
+    if schema is None:
+        return None
+    if not isinstance(schema, str) or "{{" in schema or "{%" in schema:
+        return _UNKNOWN
+    return schema
+
+
 def _check_clashes(
     project: SemanticProject, models: Iterable[ExportModel], output_dir: Path
 ) -> None:
@@ -99,8 +144,10 @@ def _check_clashes(
     dbt-s-layer's own files in `output_dir` are earlier output and are skipped. A
     relation is compared by custom schema and alias, case-insensitively, which
     is exact whenever generate_schema_name depends only on the custom schema
-    (03-RESEARCH finding 3). Nodes that set a database are skipped: exports
-    cannot set one.
+    (03-RESEARCH finding 3). An export without its own schema takes the output
+    directory's folder `+schema`; if that is templated, the export is not
+    compared. Nodes that set a database, and ephemeral models, are skipped:
+    exports cannot set a database, and ephemeral models build no relation.
     """
     root = project.dbt_manifest.metadata.project_name
     output_dir = output_dir.resolve()
@@ -112,10 +159,15 @@ def _check_clashes(
             if path.parent.resolve() == output_dir and is_owned_name(path.name):
                 continue
             by_name.setdefault(node.name.lower(), node)
-        if node.config.database is not None or node.config.target_schema is not None:
+        if (
+            node.config.database is not None
+            or node.config.target_schema is not None
+            or node.config.materialized == "ephemeral"
+        ):
             continue
         by_relation.setdefault(_relation_key(node.config.schema_name, node.alias), node)
 
+    folder_schema = _folder_schema(project, output_dir)
     for model in models:
         name = model.file_name.removesuffix(".sql")
         node = by_name.get(name.lower())
@@ -124,9 +176,13 @@ def _check_clashes(
                 f"{model.file_name} would define model {name!r}, but {node.unique_id} "
                 f"({node.original_file_path}) already has that name. Rename one of them."
             )
-        node = by_relation.get(_relation_key(model.schema, model.alias))
+        schema = model.schema if model.schema is not None else folder_schema
+        if schema is _UNKNOWN:
+            continue
+        schema = cast("str | None", schema)
+        node = by_relation.get(_relation_key(schema, model.alias))
         if node is not None:
-            where = f"custom schema {model.schema!r}" if model.schema else "the target schema"
+            where = f"custom schema {schema.lower()!r}" if schema else "the target schema"
             raise ModelClashError(
                 f"export {model.export!r} of saved query {model.saved_query!r} and "
                 f"{node.unique_id} ({node.original_file_path}) would both build alias "

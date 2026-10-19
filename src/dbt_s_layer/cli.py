@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Annotated
+from typing import TYPE_CHECKING, Annotated
 
 import typer
 
-from dbt_s_layer import _commands
+from dbt_s_layer import _paths
+
+if TYPE_CHECKING:
+    from dbt_s_layer._commands import Options
 
 app = typer.Typer(
     name="dbt-s-layer",
@@ -60,10 +63,13 @@ def _options(
     target: str | None,
     adapter: str | None,
     profiles_dir: Path | None,
-) -> _commands.Options:
-    return _commands.Options(
+) -> Options:
+    # Imported here, like `_doctor`: it loads metricflow, which `doctor` must not need.
+    from dbt_s_layer._commands import Options
+
+    return Options(
         project_dir=project_dir or Path.cwd(),
-        output_dir=output_dir or _commands.DEFAULT_OUTPUT_DIR,
+        output_dir=output_dir or _paths.DEFAULT_OUTPUT_DIR,
         target=target,
         adapter=adapter,
         profiles_dir=profiles_dir,
@@ -79,6 +85,8 @@ def generate(
     profiles_dir: Annotated[Path | None, _PROFILES_DIR] = None,
 ) -> None:
     """Generate dbt models from the project's semantic layer into --output-dir."""
+    from dbt_s_layer import _commands
+
     options = _options(project_dir, output_dir, target, adapter, profiles_dir)
     raise typer.Exit(code=_commands.run_generate(options))
 
@@ -92,6 +100,8 @@ def check(
     profiles_dir: Annotated[Path | None, _PROFILES_DIR] = None,
 ) -> None:
     """Exit 1 if the generated models in --output-dir are out of date (for CI)."""
+    from dbt_s_layer import _commands
+
     options = _options(project_dir, output_dir, target, adapter, profiles_dir)
     raise typer.Exit(code=_commands.run_check(options))
 

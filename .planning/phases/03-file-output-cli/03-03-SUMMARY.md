@@ -16,3 +16,14 @@
   moved aside into the staging directory, and every move is undone if any step fails, so a
   failed run really does leave the directory as it was. The new test also caught a bookkeeping
   bug in the first version of the undo.
+
+## Review round 2 (PR #5)
+
+- Blocking: `cli.py` imported `_commands` (and so metricflow) at load, and `doctor` imported
+  it for two path helpers, so a missing metricflow crashed every command instead of `doctor`
+  exiting 2. The helpers moved to the metricflow-free `_paths.py`, and `generate`/`check`
+  import `_commands` lazily. A subprocess test runs `--help` and `doctor` with metricflow
+  blocked.
+- An export without its own schema now takes the output directory's folder `+schema` from
+  dbt_project.yml in the clash check (deepest setting wins; a Jinja value skips that export
+  rather than guessing). Ephemeral models are no longer compared, since they build no relation.

@@ -194,6 +194,8 @@ class NodeConfig(_ManifestModel):
     database: str | None = None
     # Legacy snapshots: a schema used as is.
     target_schema: str | None = None
+    # `ephemeral` models build no relation.
+    materialized: str | None = None
 
 
 class ModelNode(_ManifestModel):
