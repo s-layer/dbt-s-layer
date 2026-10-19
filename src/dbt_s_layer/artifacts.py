@@ -198,6 +198,9 @@ class ModelNode(_ManifestModel):
     database: str | None = None
     schema_name: str = Field(alias="schema")
     alias: str
+    # The engine's own rendering of the relation, quoted by dbt Core but not by
+    # Fusion. Only compared with strings from the same engine (time spines).
+    relation_name: str | None = None
 
 
 class DbtSemanticModel(_ManifestModel):

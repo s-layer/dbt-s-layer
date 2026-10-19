@@ -56,8 +56,11 @@ def _render(text: str) -> str:
         parts = [str(a) for a in args] + [f"v{v}" for v in kwargs.values()]
         return "REL<" + ".".join(parts) + ">"
 
+    def config(**_: object) -> str:
+        return ""
+
     env = jinja2.Environment(undefined=jinja2.StrictUndefined)
-    return env.from_string(text).render(ref=ref, config=lambda **_: "")
+    return env.from_string(text).render(ref=ref, config=config)
 
 
 def _relations(project: SemanticProject) -> dict[str, str]:
@@ -93,7 +96,7 @@ def test_the_callers_manifest_is_untouched(set_name: str, make_project: MakeProj
     build_sentinel_table(project)
     assert _relations(project) == before
     assert spine.node_relation.relation_name == spine_before
-    assert not any(p in json.dumps(project.semantic_manifest.dict()) for p in RESERVED_PREFIXES)
+    assert not any(p in project.semantic_manifest.json() for p in RESERVED_PREFIXES)
 
 
 @pytest.mark.parametrize(
@@ -136,7 +139,6 @@ def test_semantic_models_on_one_node_share_a_token(make_project: MakeProject) ->
         clone = json.loads(json.dumps(orders))
         clone["name"] = "orders_again"
         for entity in clone["entities"]:
-            entity["type"] = "foreign" if entity["type"] == "primary" else entity["type"]
             entity["name"] = f"{entity['name']}_again"
         clone["measures"] = [{**m, "name": f"{m['name']}_again"} for m in clone["measures"]]
         clone["dimensions"] = [{**d, "name": f"{d['name']}_again"} for d in clone["dimensions"]]
