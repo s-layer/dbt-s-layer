@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import os
-from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import pytest
@@ -15,7 +14,9 @@ from dbt_s_layer.output import SCHEMA_FILE, render_output
 from dbt_s_layer.project import load_project
 
 if TYPE_CHECKING:
-    from typer.testing import Result
+    from pathlib import Path
+
+    from click.testing import Result
 
     from tests.conftest import MakeProject
 
@@ -141,7 +142,7 @@ def test_generate_removes_stale_models(project_dir: Path) -> None:
 
 def test_stale_artifacts_stop_generate(project_dir: Path) -> None:
     yaml_file = project_dir / "models" / "marts" / "orders.yml"
-    future = yaml_file.stat().st_mtime + 60
+    future = (project_dir / "target" / "semantic_manifest.json").stat().st_mtime + 60
     os.utime(yaml_file, (future, future))
     result = _invoke("generate", "--project-dir", project_dir)
     assert result.exit_code == 1
@@ -221,7 +222,13 @@ def test_adapter_flag(project_dir: Path) -> None:
 def test_target_flag_reads_profiles(project_dir: Path) -> None:
     profiles = project_dir / "profiles"
     result = _invoke(
-        "generate", "--project-dir", project_dir, "--profiles-dir", profiles, "--target", "snowflake"
+        "generate",
+        "--project-dir",
+        project_dir,
+        "--profiles-dir",
+        profiles,
+        "--target",
+        "snowflake",
     )
     assert result.exit_code == 0, result.output
     assert _generated(project_dir) == render_output(load_project(project_dir), adapter="snowflake")
@@ -245,8 +252,13 @@ def test_adapter_wins_over_target(project_dir: Path) -> None:
 
 def test_unknown_target(project_dir: Path) -> None:
     result = _invoke(
-        "generate", "--project-dir", project_dir, "--profiles-dir", project_dir / "profiles",
-        "--target", "prod",
+        "generate",
+        "--project-dir",
+        project_dir,
+        "--profiles-dir",
+        project_dir / "profiles",
+        "--target",
+        "prod",
     )
     assert result.exit_code == 1
     assert "'duckdb', 'snowflake'" in result.output
@@ -298,7 +310,7 @@ def test_check_honours_output_dir_and_adapter(project_dir: Path) -> None:
 def test_check_on_stale_artifacts(project_dir: Path) -> None:
     assert _invoke("generate", "--project-dir", project_dir).exit_code == 0
     yaml_file = project_dir / "models" / "marts" / "orders.yml"
-    future = yaml_file.stat().st_mtime + 60
+    future = (project_dir / "target" / "semantic_manifest.json").stat().st_mtime + 60
     os.utime(yaml_file, (future, future))
     result = _invoke("check", "--project-dir", project_dir)
     assert result.exit_code == 1
