@@ -47,11 +47,15 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Depends on**: Phase 0
 **Requirements**: PARSE-01, PARSE-02, PARSE-03, CLI-05
 **Success Criteria** (what must be TRUE):
-  1. Given a legacy-spec fixture project, the pipeline produces an internal `SemanticProject` object with all semantic models, metrics, and saved queries loaded
-  2. Given a new-spec (dbt 2.x / Fusion) fixture project, the same pipeline produces the equivalent internal object with no code path differences
+  1. Given a legacy-spec fixture project (parsed by dbt Core; Fusion 2.x ignores the legacy spec), the pipeline produces an internal `SemanticProject` object with all semantic models, metrics, and saved queries loaded
+  2. Given a new-spec fixture project parsed by Fusion or by dbt Core 1.12+, the same pipeline produces the equivalent internal object with no code path differences
   3. Every `semantic_model.node_relation.relation_name` is mapped to a `ref()` / `source()` sentinel via `manifest.json` `depends_on.nodes` lookup
   4. Running any CLI command with a stale or missing `semantic_manifest.json` exits with a clear error telling the user to run `dbt parse` / `dbtf parse`
-**Plans**: TBD
+**Plans**: 4 plans
+  - [ ] 01-01-PLAN.md — Fixture corpus: real artifacts from Fusion 2.0.8 (new spec) and dbt Core 1.12.6 (new + legacy spec), regen script, corpus guard tests (Wave 1)
+  - [ ] 01-02-PLAN.md — Artifact readers + `SemanticProject` loader via metricflow's dbt manifest parser [PARSE-01, PARSE-02] (Wave 2)
+  - [ ] 01-03-PLAN.md — Ref map: semantic model -> dbt node, verbatim `ref()` expression, relation parts [PARSE-03] (Wave 3)
+  - [ ] 01-04-PLAN.md — Missing/stale artifact errors, dropped-semantic-model warning, `doctor --project-dir` [CLI-05, CLI-03] (Wave 3)
 
 ### Phase 2: Export SQL Generation
 **Goal**: Given a parsed `SemanticProject`, emit MetricFlow-rendered SQL for every `saved_query` export, with all physical table references rewritten to dbt `{{ ref() }}` / `{{ source() }}` / versioned / cross-project Jinja calls
