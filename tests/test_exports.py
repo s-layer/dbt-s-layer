@@ -571,3 +571,181 @@ def test_duplicate_relations_ignore_schema_case(make_project: MakeProject) -> No
     project = load_project(_mutate(make_project, "core_export", clash, clash_dbt))
     with pytest.raises(ExportRenderError, match=r"alias 'revenue_daily'"):
         render_exports(project)
+
+
+# --- one engine set-up, parallel explain (05-01) ------------------------------
+
+
+def _engine_per_saved_query(project: SemanticProject, adapter: str | None = None) -> dict[str, str]:
+    """Phase 2's rendering: a fresh engine per saved query; saved query -> rewritten SQL."""
+    from dbt_s_layer.sentinels import build_sentinel_table, rewrite
+
+    adapter = adapter or project.dbt_manifest.metadata.adapter_type
+    assert adapter is not None
+    table = build_sentinel_table(project)
+    lookup = SemanticManifestLookup(table.manifest)
+    client = sql_client_for(adapter)
+    sql: dict[str, str] = {}
+    for sq in table.manifest.saved_queries:
+        engine = MetricFlowEngine(lookup, client)
+        statement = engine.explain(MetricFlowQueryRequest.create(saved_query_name=sq.name))
+        sql[sq.name] = rewrite(statement.sql_statement.sql, table, context=sq.name)
+    return sql
+
+
+ALL_EXPORT_SETS = [*EXPORT_SETS, "core_snowflake", "fusion_snowflake"]
+
+
+def test_one_engine_per_render(make_project: MakeProject, monkeypatch: pytest.MonkeyPatch) -> None:
+    from dbt_s_layer import exports
+
+    built: list[object] = []
+
+    class CountingEngine(MetricFlowEngine):
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            built.append(self)
+            super().__init__(*args, **kwargs)
+
+    monkeypatch.setattr(exports, "MetricFlowEngine", CountingEngine)
+    models = render_exports(load_project(make_project("fusion_export")), jobs=1)
+    assert len({m.saved_query for m in models}) > 1
+    assert len(built) == 1
+
+
+@pytest.mark.parametrize("set_name", ALL_EXPORT_SETS)
+@pytest.mark.parametrize("jobs", [1, 4])
+@pytest.mark.parametrize("adapter", [None, "snowflake", "databricks"])
+def test_bodies_match_an_engine_per_saved_query(
+    set_name: str, jobs: int, adapter: str | None, make_project: MakeProject
+) -> None:
+    project = load_project(make_project(set_name))
+    expected = _engine_per_saved_query(project, adapter)
+    models = render_exports(project, adapter=adapter, jobs=jobs)
+    assert {m.saved_query for m in models} == set(expected)
+    for model in models:
+        assert model.body.endswith("\n\n" + expected[model.saved_query] + "\n"), model.file_name
+
+
+@pytest.mark.parametrize("set_name", ALL_EXPORT_SETS)
+def test_a_process_pool_renders_what_one_process_does(
+    set_name: str, make_project: MakeProject
+) -> None:
+    project = load_project(make_project(set_name))
+    assert render_exports(project, jobs=4) == render_exports(project, jobs=1)
+
+
+@pytest.mark.parametrize("jobs", [1, 4])
+def test_identical_saved_queries_render_identical_sql_with_any_jobs(
+    jobs: int, make_project: MakeProject
+) -> None:
+    def copy(raw: dict[str, Any]) -> None:
+        original = next(q for q in raw["saved_queries"] if q["name"] == "items_by_country")
+        for name in ("items_copy", "items_copy2"):
+            clone = json.loads(json.dumps(original))
+            clone["name"] = name
+            clone["exports"][0]["config"]["alias"] = name
+            raw["saved_queries"].append(clone)
+
+    def copy_dbt(raw: dict[str, Any]) -> None:
+        for name in ("items_copy", "items_copy2"):
+            clone = json.loads(json.dumps(raw["saved_queries"]["saved_query.fx.items_by_country"]))
+            clone.update(name=name, unique_id=f"saved_query.fx.{name}")
+            raw["saved_queries"][f"saved_query.fx.{name}"] = clone
+
+    project = load_project(_mutate(make_project, "fusion_export", copy, copy_dbt))
+    models = _by_file(render_exports(project, jobs=jobs))
+    original = models["exp__items_by_country__exp_items_by_country.sql"].body
+    for name in ("items_copy", "items_copy2"):
+        body = models[f"exp__{name}__exp_items_by_country.sql"].body
+        assert body.replace(f"alias='{name}'", "alias='exp_items_by_country'") == original
+
+
+def test_a_process_pool_reports_the_first_failing_saved_query(make_project: MakeProject) -> None:
+    def ambiguous(raw: dict[str, Any]) -> None:
+        for name in ("revenue_by_region_country", "revenue_by_day"):
+            sq = next(q for q in raw["saved_queries"] if q["name"] == name)
+            sq["query_params"]["metrics"] = ["revenue", "items_sold"]
+            sq["query_params"]["group_by"] = ["Dimension('store__region')"]
+
+    project = load_project(_mutate(make_project, "core_export", ambiguous))
+    with pytest.raises(ExportRenderError) as one:
+        render_exports(project, jobs=1)
+    with pytest.raises(ExportRenderError) as pool:
+        render_exports(project, jobs=4)
+    assert "saved query 'revenue_by_day'" in str(one.value)
+    assert str(pool.value) == str(one.value)
+
+
+def test_bind_parameters_are_refused_in_a_process_pool(
+    make_project: MakeProject, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from metricflow.engine import metricflow_engine
+    from metricflow_semantics.sql.sql_bind_parameters import SqlBindParameterSet
+
+    explain = metricflow_engine.MetricFlowEngine.explain
+
+    def with_params(self: Any, request: Any) -> Any:
+        result = explain(self, request)
+        statement = result.sql_statement
+        params = SqlBindParameterSet.create_from_dict({"p": 1})
+
+        class _Result:
+            sql_statement = type(statement)(sql=statement.sql, bind_parameter_set=params)
+
+        return _Result()
+
+    monkeypatch.setattr(metricflow_engine.MetricFlowEngine, "explain", with_params)
+    project = load_project(make_project("core_export"))
+    with pytest.raises(ExportRenderError, match=r"saved query 'cumulative_revenue'.*bind"):
+        render_exports(project, jobs=4)
+
+
+@pytest.mark.parametrize(
+    ("saved_queries", "env", "cpus", "fork", "expected"),
+    [
+        (50, None, 4, True, 4),
+        (50, None, 16, True, 8),
+        (50, None, 1, True, 1),
+        (50, None, 4, False, 1),
+        (7, None, 4, True, 1),
+        (8, None, 4, True, 4),
+        (50, "1", 4, True, 1),
+        (50, "3", 4, True, 3),
+        (2, "6", 4, True, 2),
+        (0, None, 4, True, 1),
+    ],
+)
+def test_worker_count(
+    saved_queries: int,
+    env: str | None,
+    cpus: int,
+    fork: bool,
+    expected: int,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from dbt_s_layer import exports
+
+    if env is None:
+        monkeypatch.delenv("DBT_S_LAYER_JOBS", raising=False)
+    else:
+        monkeypatch.setenv("DBT_S_LAYER_JOBS", env)
+    monkeypatch.setattr(exports.os, "cpu_count", lambda: cpus)
+    methods = ["fork", "spawn"] if fork else ["spawn"]
+    monkeypatch.setattr(exports.multiprocessing, "get_all_start_methods", lambda: methods)
+    assert exports.worker_count(saved_queries) == expected
+
+
+@pytest.mark.parametrize("env", ["0", "-2", "many", "2.5"])
+def test_worker_count_rejects_a_bad_environment_variable(
+    env: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from dbt_s_layer import exports
+
+    monkeypatch.setenv("DBT_S_LAYER_JOBS", env)
+    with pytest.raises(ExportRenderError, match=r"DBT_S_LAYER_JOBS"):
+        exports.worker_count(50)
+
+
+def test_jobs_must_be_positive(make_project: MakeProject) -> None:
+    with pytest.raises(ValueError, match=r"jobs"):
+        render_exports(load_project(make_project("core_export")), jobs=0)

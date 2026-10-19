@@ -82,3 +82,51 @@ def test_plan_renderers_expose_the_column_hooks_quoting_overrides() -> None:
         "render_group_by_expr",
     ):
         assert callable(getattr(DefaultSqlExpressionRenderer, name))
+
+
+def test_engine_planner_attributes_used_by_the_shared_set_up() -> None:
+    """
+    `exports` gives each saved query a fresh planner on one engine's set-up (05-RESEARCH).
+
+    It reads these private attributes of the pinned metricflow and replaces the planner ones.
+    """
+    import shutil
+    import tempfile
+
+    from metricflow.dataflow.builder.builder_cache import DataflowPlanBuilderCache
+    from metricflow.dataflow.builder.dataflow_plan_builder import DataflowPlanBuilder
+    from metricflow.engine.metricflow_engine import MetricFlowEngine
+    from metricflow.plan_conversion.to_sql_plan.dataflow_to_sql import (
+        DataflowToSqlPlanConverter,
+    )
+    from metricflow.plan_conversion.to_sql_plan.dataflow_to_subquery import (
+        DataflowNodeToSqlSubqueryVisitor,
+    )
+    from metricflow_semantics.model.semantic_manifest_lookup import SemanticManifestLookup
+
+    from dbt_s_layer.exports import sql_client_for
+    from dbt_s_layer.project import load_project
+    from tests.conftest import ARTIFACTS, PROJECTS
+
+    with tempfile.TemporaryDirectory() as tmp:
+        project_dir = Path(tmp) / "p"
+        shutil.copytree(
+            PROJECTS / "export_legacy", project_dir, ignore=shutil.ignore_patterns("target")
+        )
+        (project_dir / "target").mkdir()
+        for name in ("semantic_manifest.json", "manifest.json"):
+            shutil.copyfile(ARTIFACTS / "core_export" / name, project_dir / "target" / name)
+        project = load_project(project_dir)
+    engine = MetricFlowEngine(
+        SemanticManifestLookup(project.semantic_manifest), sql_client_for("duckdb")
+    )
+    assert isinstance(engine._dataflow_plan_builder, DataflowPlanBuilder)
+    assert isinstance(engine._dataflow_plan_builder_cache, DataflowPlanBuilderCache)
+    assert isinstance(engine._to_sql_plan_converter, DataflowToSqlPlanConverter)
+    assert isinstance(engine._semantic_manifest_lookup, SemanticManifestLookup)
+    assert engine._column_association_resolver is not None
+    builder = engine._dataflow_plan_builder
+    assert builder._source_node_set is not None
+    assert builder._source_node_builder is not None
+    assert isinstance(builder._node_data_set_resolver, DataflowNodeToSqlSubqueryVisitor)
+    assert isinstance(builder._node_data_set_resolver.copy(), DataflowNodeToSqlSubqueryVisitor)
