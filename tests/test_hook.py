@@ -416,3 +416,56 @@ def test_help_lists_the_hook_command() -> None:
     assert result.exit_code == 0
     for option in ("--dbt", "--no-parse", "--project-dir", "--output-dir", "--target"):
         assert option in result.output
+
+
+# --- the hook definition --------------------------------------------------------
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def _hook_definition() -> dict[str, object]:
+    from ruamel.yaml import YAML
+
+    hooks = YAML(typ="safe").load((ROOT / ".pre-commit-hooks.yaml").read_text())
+    assert isinstance(hooks, list)
+    assert len(cast("list[object]", hooks)) == 1
+    hook = cast("list[dict[str, object]]", hooks)[0]
+    return hook
+
+
+def test_hook_definition() -> None:
+    import tomllib
+
+    hook = _hook_definition()
+    assert hook["id"] == "dbt-s-layer"
+    assert hook["language"] == "python"
+    assert hook["entry"] == "dbt-s-layer pre-commit"
+    # Without it pre-commit runs file partitions in parallel, two parses of one project.
+    assert hook["require_serial"] is True
+    assert hook.get("pass_filenames", True) is True
+    scripts = tomllib.loads((ROOT / "pyproject.toml").read_text())["project"]["scripts"]
+    assert scripts["dbt-s-layer"] == "dbt_s_layer.cli:app"
+
+
+@pytest.mark.parametrize(
+    ("path", "matches"),
+    [
+        ("models/marts/orders.yml", True),
+        ("analytics/models/orders.yaml", True),
+        ("dbt_project.yml", True),
+        ("analytics/dbt_project.yml", True),
+        ("models/semantic/sem__orders.sql", True),
+        ("models/semantic/exp__q__e.sql", True),
+        ("models/semantic/_semantic_views.yml", True),
+        ("models/marts/orders.sql", False),
+        ("models/marts/my_exp__x.sql", False),
+        ("src/app.py", False),
+        ("README.md", False),
+    ],
+)
+def test_hook_files_pattern(path: str, matches: bool) -> None:
+    import re
+
+    pattern = _hook_definition()["files"]
+    assert isinstance(pattern, str)
+    assert (re.search(pattern, path) is not None) is matches
