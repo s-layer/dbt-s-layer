@@ -472,6 +472,34 @@
       "exports": [
         {
           "config": {
+            "alias": "exp_items_by_country",
+            "export_as": "table",
+            "schema_name": "sq_schema"
+          },
+          "name": "exp_items_by_country"
+        }
+      ],
+      "label": null,
+      "metadata": null,
+      "name": "items_by_country",
+      "query_params": {
+        "group_by": [
+          "Dimension('customer__country', entity_path=['order'])"
+        ],
+        "limit": null,
+        "metrics": [
+          "items_sold"
+        ],
+        "order_by": [],
+        "where": null
+      },
+      "tags": []
+    },
+    {
+      "description": null,
+      "exports": [
+        {
+          "config": {
             "alias": "exp_revenue_by_day",
             "export_as": "table",
             "schema_name": "MARTS"
@@ -500,6 +528,41 @@
         ],
         "order_by": [],
         "where": null
+      },
+      "tags": []
+    },
+    {
+      "description": null,
+      "exports": [
+        {
+          "config": {
+            "alias": "exp_region_country",
+            "export_as": "table",
+            "schema_name": "MARTS"
+          },
+          "name": "exp_region_country"
+        }
+      ],
+      "label": null,
+      "metadata": null,
+      "name": "revenue_by_region_country",
+      "query_params": {
+        "group_by": [
+          "Dimension('store__region')",
+          "Dimension('customer__country')"
+        ],
+        "limit": null,
+        "metrics": [
+          "revenue"
+        ],
+        "order_by": [],
+        "where": {
+          "where_filters": [
+            {
+              "where_sql_template": "{{ Dimension('order__status') }} = 'paid'"
+            }
+          ]
+        }
       },
       "tags": []
     }

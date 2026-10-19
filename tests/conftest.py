@@ -20,7 +20,7 @@ SET_PROJECTS = {
     "fusion_export": "export_spec",
     "core_export": "export_legacy",
     "fusion_snowflake": "snowflake_spec",
-    "core_snowflake": "snowflake_spec",
+    "core_snowflake": "snowflake_legacy",
 }
 # Sets the Phase 1 loader tests run over.
 ARTIFACT_SETS = ("fusion_new", "core_new", "core_legacy")

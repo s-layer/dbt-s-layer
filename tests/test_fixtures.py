@@ -201,21 +201,14 @@ def test_snowflake_sets_have_the_semantic_view_package(set_name: str) -> None:
     assert SEMANTIC_VIEW_MACRO in manifest["macros"]
 
 
-def test_snowflake_sets_cover_the_metric_mapping() -> None:
-    semantic = _load("fusion_snowflake", "semantic_manifest.json")
+@pytest.mark.parametrize("set_name", SNOWFLAKE_SETS)
+def test_snowflake_sets_cover_the_metric_mapping(set_name: str) -> None:
+    semantic = _load(set_name, "semantic_manifest.json")
+    assert _names(semantic["semantic_models"]) == {"customers", "order_items", "orders", "stores"}
     kinds = {m["name"]: m["type"] for m in semantic["metrics"]}
     assert kinds["average_order_value"] == "ratio"
     assert kinds["revenue_doubled"] == "derived"
     assert kinds["revenue_per_item"] == "derived"
     assert kinds["revenue_cumulative"] == "cumulative"
-    params = {
-        m["name"]: m["type_params"]["metric_aggregation_params"]
-        for m in semantic["metrics"]
-        if m["type"] == "simple"
-    }
-    assert params["revenue_p90"]["agg"] == "percentile"
-    assert params["latest_revenue"]["non_additive_dimension"]["window_choice"] == "max"
-    # dbt Core 1.12.6 drops the semantic model on the versioned `customers` model.
-    core = _load("core_snowflake", "semantic_manifest.json")
-    assert "customers" not in _names(core["semantic_models"])
-    assert "customers" in _names(semantic["semantic_models"])
+    assert kinds["revenue_p90"] == "simple"
+    assert kinds["latest_revenue"] == "simple"

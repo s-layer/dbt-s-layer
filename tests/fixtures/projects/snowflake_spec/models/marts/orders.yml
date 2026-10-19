@@ -1,6 +1,5 @@
-# The Snowflake fixture: export_spec plus metrics that exercise the semantic view mapping.
-# No saved query groups by customers' dimensions: dbt Core 1.12.6 drops the semantic model
-# on the versioned `customers` model, and would then refuse to parse.
+# The Snowflake fixture (Fusion; snowflake_legacy is its dbt Core twin): export_spec plus
+# metrics that exercise the semantic view mapping.
 models:
   - name: orders
     description: "One row per order. It's the 'fact' table."
@@ -84,6 +83,24 @@ saved_queries:
           export_as: view
           alias: revenue_daily
           schema: reporting
+  - name: revenue_by_region_country
+    query_params:
+      metrics: [revenue]
+      group_by: ["Dimension('store__region')", "Dimension('customer__country')"]
+      where: ["{{ Dimension('order__status') }} = 'paid'"]
+    exports:
+      - name: exp_region_country
+        config:
+          export_as: table
+  - name: items_by_country
+    config:
+      schema: sq_schema
+      export_as: view
+    query_params:
+      metrics: [items_sold]
+      group_by: ["Dimension('customer__country', entity_path=['order'])"]
+    exports:
+      - name: exp_items_by_country
   - name: cumulative_revenue
     query_params:
       metrics: [revenue_cumulative]
