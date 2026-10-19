@@ -14,6 +14,7 @@ Deferred to Phase 3: output directory writability check.
 
 from __future__ import annotations
 
+import os
 import re
 import shutil
 import subprocess
@@ -29,10 +30,18 @@ DBT_CORE_INSTALL_URL = "https://docs.getdbt.com/docs/core/installation-overview"
 MIN_DBT_CORE_VERSION = (1, 7, 0)
 _VERSION_TIMEOUT_SECONDS = 30
 
-_FUSION_RE = re.compile(r"^dbt (\d+)\.(\d+)\.(\d+)", re.MULTILINE)
+# Stable and dev Fusion builds print `dbt 2.0.8`; preview builds print
+# `dbt-fusion 2.0.0-preview.212`.
+_FUSION_RE = re.compile(r"^dbt(?:-fusion)? (\d+)\.(\d+)\.(\d+)", re.MULTILINE)
 _CORE_RE = re.compile(r"^Core:\s*\n\s*-\s*installed:\s*(\d+)\.(\d+)\.(\d+)", re.MULTILINE)
+# dbt Core before 1.0 printed `installed version: 0.21.0`.
+_CORE_PRE_1_0_RE = re.compile(r"^installed version:\s*(\d+)\.(\d+)\.(\d+)", re.MULTILINE)
 
 EngineKind = Literal["Fusion", "dbt Core"]
+
+
+class VersionProbeError(Exception):
+    """`<binary> --version` could not be run or did not succeed."""
 
 
 @dataclass(frozen=True)
@@ -48,23 +57,47 @@ class Engine:
         """Human-readable name and version, e.g. `Fusion 2.0.8`."""
         return f"{self.kind} {'.'.join(map(str, self.version))}"
 
+    @property
+    def supported(self) -> bool:
+        """Whether this engine can write a usable semantic_manifest.json."""
+        return self.kind == "Fusion" or self.version >= MIN_DBT_CORE_VERSION
+
+
+@dataclass(frozen=True)
+class Rejected:
+    """A `dbtf`/`dbt` on PATH that is not a usable engine, and why."""
+
+    path: str
+    reason: str
+
+
+@dataclass(frozen=True)
+class Detection:
+    """Everything `detect_engines` found on PATH."""
+
+    engines: tuple[Engine, ...]
+    rejected: tuple[Rejected, ...]
+
+
+def _version_tuple(match: re.Match[str]) -> tuple[int, int, int]:
+    major, minor, patch = (int(g) for g in match.groups())
+    return (major, minor, patch)
+
 
 def parse_engine_version(output: str, path: str) -> Engine | None:
     """Classify `<binary> --version` output as Fusion or dbt Core, or None."""
     fusion = _FUSION_RE.search(output)
-    if fusion is not None:
-        major, minor, patch = (int(g) for g in fusion.groups())
-        if major >= 2:
-            return Engine("Fusion", (major, minor, patch), path)
-    core = _CORE_RE.search(output)
-    if core is not None:
-        major, minor, patch = (int(g) for g in core.groups())
-        return Engine("dbt Core", (major, minor, patch), path)
+    if fusion is not None and int(fusion.group(1)) >= 2:
+        return Engine("Fusion", _version_tuple(fusion), path)
+    for pattern in (_CORE_RE, _CORE_PRE_1_0_RE):
+        core = pattern.search(output)
+        if core is not None:
+            return Engine("dbt Core", _version_tuple(core), path)
     return None
 
 
-def _version_output(path: str) -> str | None:
-    """Return `<path> --version` stdout, or None if it fails or hangs."""
+def _version_output(path: str) -> str:
+    """Return `<path> --version` stdout, raising VersionProbeError on any failure."""
     try:
         result = subprocess.run(
             [path, "--version"],
@@ -73,26 +106,42 @@ def _version_output(path: str) -> str | None:
             timeout=_VERSION_TIMEOUT_SECONDS,
             check=False,
         )
-    except (OSError, subprocess.SubprocessError):
-        return None
+    except subprocess.TimeoutExpired as exc:
+        raise VersionProbeError(f"`--version` timed out after {_VERSION_TIMEOUT_SECONDS}s") from exc
+    except OSError as exc:
+        raise VersionProbeError(f"could not run it ({exc})") from exc
     if result.returncode != 0:
-        return None
+        raise VersionProbeError(f"`--version` exited with code {result.returncode}")
     return result.stdout
 
 
-def detect_engine() -> Engine | None:
-    """Find a dbt engine on PATH, preferring `dbtf` over `dbt`."""
+def detect_engines() -> Detection:
+    """Find every dbt engine on PATH, checking `dbtf` then `dbt`."""
+    engines: list[Engine] = []
+    rejected: list[Rejected] = []
+    seen: set[str] = set()
     for name in ("dbtf", "dbt"):
         path = shutil.which(name)
         if path is None:
             continue
-        output = _version_output(path)
-        if output is None:
+        real = os.path.realpath(path)
+        if real in seen:
+            continue
+        seen.add(real)
+        try:
+            output = _version_output(path)
+        except VersionProbeError as exc:
+            rejected.append(Rejected(path, str(exc)))
             continue
         engine = parse_engine_version(output, path)
-        if engine is not None:
-            return engine
-    return None
+        if engine is None:
+            first_line = output.strip().splitlines()[0] if output.strip() else "(no output)"
+            rejected.append(
+                Rejected(path, f"it is not dbt Fusion or dbt Core (`--version`: {first_line})")
+            )
+        else:
+            engines.append(engine)
+    return Detection(tuple(engines), tuple(rejected))
 
 
 def run_doctor() -> int:
@@ -108,21 +157,34 @@ def run_doctor() -> int:
     """
     exit_code = 0
 
-    engine = detect_engine()
-    if engine is None:
-        print("ERROR: no dbt engine found on PATH (looked for `dbtf` and `dbt`).", file=sys.stdout)
+    found = detect_engines()
+    for engine in found.engines:
+        if engine.supported:
+            print(f"OK  dbt engine: {engine.label} at {engine.path}", file=sys.stdout)
+        else:
+            print(
+                f"WARN dbt engine: {engine.label} at {engine.path} is too old "
+                "(dbt-s-layer needs dbt Core >= 1.7 or dbt Fusion)",
+                file=sys.stdout,
+            )
+    for rejected in found.rejected:
+        print(f"WARN found {rejected.path} but {rejected.reason}", file=sys.stdout)
+
+    supported = [e for e in found.engines if e.supported]
+    if not supported:
+        print(
+            "ERROR: no supported dbt engine found on PATH (looked for `dbtf` and `dbt`).",
+            file=sys.stdout,
+        )
         print(f"Install dbt Fusion: {FUSION_INSTALL_URL}", file=sys.stdout)
         print(f"Or dbt Core >= 1.7: {DBT_CORE_INSTALL_URL}", file=sys.stdout)
         exit_code = max(exit_code, 1)
-    elif engine.kind == "dbt Core" and engine.version < MIN_DBT_CORE_VERSION:
+    elif all(e.kind == "Fusion" for e in supported):
         print(
-            f"ERROR: {engine.label} at {engine.path} is too old; "
-            "dbt-s-layer needs dbt Core >= 1.7 or dbt Fusion.",
+            "NOTE Fusion only parses the new YAML spec. Legacy-spec projects "
+            f"(`semantic_models:` with `measures:`) need dbt Core >= 1.7: {DBT_CORE_INSTALL_URL}",
             file=sys.stdout,
         )
-        exit_code = max(exit_code, 1)
-    else:
-        print(f"OK  dbt engine: {engine.label} at {engine.path}", file=sys.stdout)
 
     try:
         mf_version = version("metricflow")
