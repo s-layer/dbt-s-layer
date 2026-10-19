@@ -1,0 +1,547 @@
+{
+  "metadata": {
+    "adapter_type": "duckdb",
+    "dbt_schema_version": "https://schemas.getdbt.com/dbt/manifest/v12.json",
+    "dbt_version": "1.12.6",
+    "project_name": "fx",
+    "quoting": {
+      "column": null,
+      "database": true,
+      "identifier": true,
+      "schema": true
+    }
+  },
+  "nodes": {
+    "model.fx.metricflow_time_spine": {
+      "access": "protected",
+      "alias": "metricflow_time_spine",
+      "checksum": {
+        "checksum": "b2ae348c4fa66c853602998d931b8bfd361008b7d0b14133b63dff0689ac0fd2",
+        "name": "sha256"
+      },
+      "columns": {
+        "date_day": {
+          "config": {
+            "meta": {},
+            "tags": []
+          },
+          "constraints": [],
+          "data_type": null,
+          "description": "",
+          "dimension": null,
+          "doc_blocks": [],
+          "entity": null,
+          "granularity": "day",
+          "meta": {},
+          "name": "date_day",
+          "quote": null,
+          "tags": []
+        }
+      },
+      "config": {
+        "access": "protected",
+        "alias": null,
+        "batch_size": null,
+        "begin": null,
+        "column_types": {},
+        "concurrent_batches": null,
+        "contract": {
+          "alias_types": true,
+          "enforced": false
+        },
+        "database": null,
+        "docs": {
+          "node_color": null,
+          "show": true
+        },
+        "enabled": true,
+        "event_time": null,
+        "freshness": null,
+        "full_refresh": null,
+        "grants": {},
+        "group": null,
+        "incremental_strategy": null,
+        "latest_version_pointer": {
+          "alias": null,
+          "enabled": null
+        },
+        "lookback": 1,
+        "materialized": "view",
+        "meta": {},
+        "on_configuration_change": "apply",
+        "on_error": null,
+        "on_schema_change": "ignore",
+        "packages": [],
+        "persist_docs": {},
+        "post-hook": [],
+        "pre-hook": [],
+        "quoting": {},
+        "schema": null,
+        "static_analysis": null,
+        "tags": [],
+        "unique_key": null
+      },
+      "constraints": [],
+      "contract": {
+        "alias_types": true,
+        "checksum": null,
+        "enforced": false
+      },
+      "database": "memory",
+      "depends_on": {
+        "macros": [],
+        "nodes": []
+      },
+      "deprecation_date": null,
+      "description": "",
+      "doc_blocks": [],
+      "docs": {
+        "node_color": null,
+        "show": true
+      },
+      "fqn": [
+        "fx",
+        "marts",
+        "metricflow_time_spine"
+      ],
+      "functions": [],
+      "group": null,
+      "language": "sql",
+      "latest_version": null,
+      "meta": {},
+      "metrics": [],
+      "name": "metricflow_time_spine",
+      "original_file_path": "models/marts/metricflow_time_spine.sql",
+      "package_name": "fx",
+      "patch_path": "fx://models/marts/time_spine.yml",
+      "path": "marts/metricflow_time_spine.sql",
+      "primary_key": [],
+      "raw_code": "select cast('2024-01-01' as date) as date_day",
+      "refs": [],
+      "relation_name": "\"memory\".\"marts\".\"metricflow_time_spine\"",
+      "resource_type": "model",
+      "schema": "marts",
+      "sources": [],
+      "tags": [],
+      "time_spine": {
+        "custom_granularities": [],
+        "standard_granularity_column": "date_day"
+      },
+      "unique_id": "model.fx.metricflow_time_spine",
+      "unrendered_config": {},
+      "version": null
+    },
+    "model.fx.order_items": {
+      "access": "protected",
+      "alias": "Order_Items",
+      "checksum": {
+        "checksum": "b3b835b6f165db19de8ce74b1a8b5017b2ba648dbbfa85e1e2aaa07545dffaec",
+        "name": "sha256"
+      },
+      "columns": {},
+      "config": {
+        "access": "protected",
+        "alias": "Order_Items",
+        "batch_size": null,
+        "begin": null,
+        "column_types": {},
+        "concurrent_batches": null,
+        "contract": {
+          "alias_types": true,
+          "enforced": false
+        },
+        "database": null,
+        "docs": {
+          "node_color": null,
+          "show": true
+        },
+        "enabled": true,
+        "event_time": null,
+        "freshness": null,
+        "full_refresh": null,
+        "grants": {},
+        "group": null,
+        "incremental_strategy": null,
+        "latest_version_pointer": {
+          "alias": null,
+          "enabled": null
+        },
+        "lookback": 1,
+        "materialized": "view",
+        "meta": {},
+        "on_configuration_change": "apply",
+        "on_error": null,
+        "on_schema_change": "ignore",
+        "packages": [],
+        "persist_docs": {},
+        "post-hook": [],
+        "pre-hook": [],
+        "quoting": {},
+        "schema": null,
+        "static_analysis": null,
+        "tags": [],
+        "unique_key": null
+      },
+      "constraints": [],
+      "contract": {
+        "alias_types": true,
+        "checksum": null,
+        "enforced": false
+      },
+      "database": "memory",
+      "depends_on": {
+        "macros": [],
+        "nodes": []
+      },
+      "deprecation_date": null,
+      "description": "",
+      "doc_blocks": [],
+      "docs": {
+        "node_color": null,
+        "show": true
+      },
+      "fqn": [
+        "fx",
+        "marts",
+        "order_items"
+      ],
+      "functions": [],
+      "group": null,
+      "language": "sql",
+      "latest_version": null,
+      "meta": {},
+      "metrics": [],
+      "name": "order_items",
+      "original_file_path": "models/marts/order_items.sql",
+      "package_name": "fx",
+      "patch_path": "fx://models/marts/order_items.yml",
+      "path": "marts/order_items.sql",
+      "primary_key": [],
+      "raw_code": "select 1 as order_item_id, 1 as order_id, cast('2024-01-01' as date) as ordered_at, 2 as quantity",
+      "refs": [],
+      "relation_name": "\"memory\".\"marts\".\"Order_Items\"",
+      "resource_type": "model",
+      "schema": "marts",
+      "sources": [],
+      "tags": [],
+      "time_spine": null,
+      "unique_id": "model.fx.order_items",
+      "unrendered_config": {
+        "alias": "Order_Items"
+      },
+      "version": null
+    },
+    "model.fx.orders": {
+      "access": "protected",
+      "alias": "orders",
+      "checksum": {
+        "checksum": "1f6f9f3ad2f071593bddc94b78b5e97f29d672a7447081cd20a5c16c56319e5f",
+        "name": "sha256"
+      },
+      "columns": {},
+      "config": {
+        "access": "protected",
+        "alias": null,
+        "batch_size": null,
+        "begin": null,
+        "column_types": {},
+        "concurrent_batches": null,
+        "contract": {
+          "alias_types": true,
+          "enforced": false
+        },
+        "database": null,
+        "docs": {
+          "node_color": null,
+          "show": true
+        },
+        "enabled": true,
+        "event_time": null,
+        "freshness": null,
+        "full_refresh": null,
+        "grants": {},
+        "group": null,
+        "incremental_strategy": null,
+        "latest_version_pointer": {
+          "alias": null,
+          "enabled": null
+        },
+        "lookback": 1,
+        "materialized": "view",
+        "meta": {},
+        "on_configuration_change": "apply",
+        "on_error": null,
+        "on_schema_change": "ignore",
+        "packages": [],
+        "persist_docs": {},
+        "post-hook": [],
+        "pre-hook": [],
+        "quoting": {},
+        "schema": null,
+        "static_analysis": null,
+        "tags": [],
+        "unique_key": null
+      },
+      "constraints": [],
+      "contract": {
+        "alias_types": true,
+        "checksum": null,
+        "enforced": false
+      },
+      "database": "memory",
+      "depends_on": {
+        "macros": [],
+        "nodes": []
+      },
+      "deprecation_date": null,
+      "description": "",
+      "doc_blocks": [],
+      "docs": {
+        "node_color": null,
+        "show": true
+      },
+      "fqn": [
+        "fx",
+        "marts",
+        "orders"
+      ],
+      "functions": [],
+      "group": null,
+      "language": "sql",
+      "latest_version": null,
+      "meta": {},
+      "metrics": [],
+      "name": "orders",
+      "original_file_path": "models/marts/orders.sql",
+      "package_name": "fx",
+      "patch_path": null,
+      "path": "marts/orders.sql",
+      "primary_key": [],
+      "raw_code": "select 1 as order_id, 1 as customer_id, cast('2024-01-01' as date) as ordered_at, 10.0 as amount",
+      "refs": [],
+      "relation_name": "\"memory\".\"marts\".\"orders\"",
+      "resource_type": "model",
+      "schema": "marts",
+      "sources": [],
+      "tags": [],
+      "time_spine": null,
+      "unique_id": "model.fx.orders",
+      "unrendered_config": {},
+      "version": null
+    }
+  },
+  "semantic_models": {
+    "semantic_model.fx.order_items": {
+      "config": {
+        "enabled": true,
+        "group": null,
+        "meta": {}
+      },
+      "defaults": {
+        "agg_time_dimension": "ordered_at"
+      },
+      "depends_on": {
+        "macros": [],
+        "nodes": [
+          "model.fx.order_items"
+        ]
+      },
+      "description": null,
+      "dimensions": [
+        {
+          "config": {
+            "meta": {}
+          },
+          "datatype": null,
+          "description": null,
+          "expr": null,
+          "is_partition": false,
+          "label": null,
+          "metadata": null,
+          "name": "ordered_at",
+          "type": "time",
+          "type_params": {
+            "time_granularity": "day",
+            "validity_params": null
+          }
+        }
+      ],
+      "entities": [
+        {
+          "config": {
+            "meta": {}
+          },
+          "description": null,
+          "expr": "order_item_id",
+          "label": null,
+          "name": "order_item",
+          "role": null,
+          "type": "primary"
+        },
+        {
+          "config": {
+            "meta": {}
+          },
+          "description": null,
+          "expr": "order_id",
+          "label": null,
+          "name": "order",
+          "role": null,
+          "type": "foreign"
+        }
+      ],
+      "fqn": [
+        "fx",
+        "marts",
+        "order_items"
+      ],
+      "group": null,
+      "label": null,
+      "measures": [
+        {
+          "agg": "sum",
+          "agg_params": null,
+          "agg_time_dimension": null,
+          "config": {
+            "meta": {}
+          },
+          "create_metric": false,
+          "description": null,
+          "expr": "quantity",
+          "label": null,
+          "name": "quantity_total",
+          "non_additive_dimension": null
+        }
+      ],
+      "metadata": null,
+      "model": "ref('order_items')",
+      "name": "order_items",
+      "node_relation": {
+        "alias": "Order_Items",
+        "database": "memory",
+        "relation_name": "\"memory\".\"marts\".\"Order_Items\"",
+        "schema_name": "marts"
+      },
+      "original_file_path": "models/marts/order_items.yml",
+      "package_name": "fx",
+      "path": "marts/order_items.yml",
+      "primary_entity": null,
+      "refs": [
+        {
+          "name": "order_items",
+          "package": null,
+          "version": null
+        }
+      ],
+      "resource_type": "semantic_model",
+      "unique_id": "semantic_model.fx.order_items",
+      "unrendered_config": {}
+    },
+    "semantic_model.fx.orders": {
+      "config": {
+        "enabled": true,
+        "group": null,
+        "meta": {}
+      },
+      "defaults": {
+        "agg_time_dimension": "ordered_at"
+      },
+      "depends_on": {
+        "macros": [],
+        "nodes": [
+          "model.fx.orders"
+        ]
+      },
+      "description": null,
+      "dimensions": [
+        {
+          "config": {
+            "meta": {}
+          },
+          "datatype": null,
+          "description": null,
+          "expr": null,
+          "is_partition": false,
+          "label": null,
+          "metadata": null,
+          "name": "ordered_at",
+          "type": "time",
+          "type_params": {
+            "time_granularity": "day",
+            "validity_params": null
+          }
+        }
+      ],
+      "entities": [
+        {
+          "config": {
+            "meta": {}
+          },
+          "description": null,
+          "expr": "order_id",
+          "label": null,
+          "name": "order",
+          "role": null,
+          "type": "primary"
+        },
+        {
+          "config": {
+            "meta": {}
+          },
+          "description": null,
+          "expr": "customer_id",
+          "label": null,
+          "name": "customer",
+          "role": null,
+          "type": "foreign"
+        }
+      ],
+      "fqn": [
+        "fx",
+        "marts",
+        "orders"
+      ],
+      "group": null,
+      "label": null,
+      "measures": [
+        {
+          "agg": "sum",
+          "agg_params": null,
+          "agg_time_dimension": null,
+          "config": {
+            "meta": {}
+          },
+          "create_metric": false,
+          "description": null,
+          "expr": "amount",
+          "label": null,
+          "name": "order_total",
+          "non_additive_dimension": null
+        }
+      ],
+      "metadata": null,
+      "model": "ref('orders')",
+      "name": "orders",
+      "node_relation": {
+        "alias": "orders",
+        "database": "memory",
+        "relation_name": "\"memory\".\"marts\".\"orders\"",
+        "schema_name": "marts"
+      },
+      "original_file_path": "models/marts/orders.yml",
+      "package_name": "fx",
+      "path": "marts/orders.yml",
+      "primary_entity": null,
+      "refs": [
+        {
+          "name": "orders",
+          "package": null,
+          "version": null
+        }
+      ],
+      "resource_type": "semantic_model",
+      "unique_id": "semantic_model.fx.orders",
+      "unrendered_config": {}
+    }
+  }
+}

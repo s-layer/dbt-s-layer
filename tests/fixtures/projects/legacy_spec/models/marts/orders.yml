@@ -1,0 +1,36 @@
+semantic_models:
+  - name: orders
+    model: ref('orders')
+    defaults:
+      agg_time_dimension: ordered_at
+    entities:
+      - name: order
+        type: primary
+        expr: order_id
+      - name: customer
+        type: foreign
+        expr: customer_id
+    dimensions:
+      - name: ordered_at
+        type: time
+        type_params:
+          time_granularity: day
+    measures:
+      - name: order_total
+        agg: sum
+        expr: amount
+metrics:
+  - name: revenue
+    type: simple
+    label: Revenue
+    type_params:
+      measure: order_total
+saved_queries:
+  - name: revenue_by_day
+    query_params:
+      metrics: [revenue]
+      group_by: ["TimeDimension('order__ordered_at', 'day')"]
+    exports:
+      - name: exp_revenue_by_day
+        config:
+          export_as: table

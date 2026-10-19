@@ -41,7 +41,7 @@ dev = [
 [tool.pyright]
 pythonVersion = "3.11"
 typeCheckingMode = "strict"
-include = ["src", "tests"]
+include = ["src", "tests", "scripts"]
 reportPrivateUsage = false
 
 [tool.ruff]

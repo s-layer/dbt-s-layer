@@ -1,0 +1,268 @@
+{
+  "metrics": [
+    {
+      "config": {
+        "meta": {}
+      },
+      "datatype": null,
+      "description": "",
+      "filter": null,
+      "label": "items_sold",
+      "metadata": null,
+      "name": "items_sold",
+      "time_granularity": null,
+      "type": "simple",
+      "type_params": {
+        "conversion_type_params": null,
+        "cumulative_type_params": null,
+        "denominator": null,
+        "expr": "quantity",
+        "fill_nulls_with": null,
+        "grain_to_date": null,
+        "input_measures": [],
+        "is_private": false,
+        "join_to_timespine": false,
+        "measure": null,
+        "metric_aggregation_params": {
+          "agg": "sum",
+          "agg_params": {
+            "percentile": null,
+            "use_approximate_percentile": false,
+            "use_discrete_percentile": false
+          },
+          "agg_time_dimension": "ordered_at",
+          "non_additive_dimension": null,
+          "semantic_model": "order_items"
+        },
+        "metrics": [],
+        "numerator": null,
+        "window": null
+      }
+    },
+    {
+      "config": {
+        "meta": {}
+      },
+      "datatype": null,
+      "description": "",
+      "filter": null,
+      "label": "Revenue",
+      "metadata": null,
+      "name": "revenue",
+      "time_granularity": null,
+      "type": "simple",
+      "type_params": {
+        "conversion_type_params": null,
+        "cumulative_type_params": null,
+        "denominator": null,
+        "expr": "amount",
+        "fill_nulls_with": null,
+        "grain_to_date": null,
+        "input_measures": [],
+        "is_private": false,
+        "join_to_timespine": false,
+        "measure": null,
+        "metric_aggregation_params": {
+          "agg": "sum",
+          "agg_params": {
+            "percentile": null,
+            "use_approximate_percentile": false,
+            "use_discrete_percentile": false
+          },
+          "agg_time_dimension": "ordered_at",
+          "non_additive_dimension": null,
+          "semantic_model": "orders"
+        },
+        "metrics": [],
+        "numerator": null,
+        "window": null
+      }
+    }
+  ],
+  "project_configuration": {
+    "dsi_package_version": {
+      "major_version": "0",
+      "minor_version": "213",
+      "patch_version": "0"
+    },
+    "metadata": null,
+    "time_spine_table_configurations": [],
+    "time_spines": [
+      {
+        "custom_granularities": [],
+        "node_relation": {
+          "alias": "metricflow_time_spine",
+          "database": "memory",
+          "relation_name": "\"memory\".\"marts\".\"metricflow_time_spine\"",
+          "schema_name": "marts"
+        },
+        "primary_column": {
+          "name": "date_day",
+          "time_granularity": "day"
+        }
+      }
+    ]
+  },
+  "saved_queries": [
+    {
+      "description": null,
+      "exports": [
+        {
+          "config": {
+            "alias": "exp_revenue_by_day",
+            "export_as": "table",
+            "schema_name": "marts"
+          },
+          "name": "exp_revenue_by_day"
+        }
+      ],
+      "label": null,
+      "metadata": null,
+      "name": "revenue_by_day",
+      "query_params": {
+        "group_by": [
+          "TimeDimension('order__ordered_at', 'day')"
+        ],
+        "limit": null,
+        "metrics": [
+          "revenue"
+        ],
+        "order_by": [],
+        "where": null
+      },
+      "tags": []
+    }
+  ],
+  "semantic_models": [
+    {
+      "config": {
+        "meta": {}
+      },
+      "defaults": {
+        "agg_time_dimension": "ordered_at"
+      },
+      "description": "",
+      "dimensions": [
+        {
+          "config": {
+            "meta": {}
+          },
+          "datatype": null,
+          "description": "",
+          "expr": null,
+          "is_partition": false,
+          "label": null,
+          "metadata": null,
+          "name": "ordered_at",
+          "type": "time",
+          "type_params": {
+            "time_granularity": "day",
+            "validity_params": null
+          }
+        }
+      ],
+      "entities": [
+        {
+          "config": {
+            "meta": {}
+          },
+          "description": "",
+          "expr": "order_item_id",
+          "label": null,
+          "metadata": null,
+          "name": "order_item",
+          "role": null,
+          "type": "primary"
+        },
+        {
+          "config": {
+            "meta": {}
+          },
+          "description": "",
+          "expr": "order_id",
+          "label": null,
+          "metadata": null,
+          "name": "order",
+          "role": null,
+          "type": "foreign"
+        }
+      ],
+      "label": null,
+      "measures": [],
+      "metadata": null,
+      "name": "order_items",
+      "node_relation": {
+        "alias": "Order_Items",
+        "database": "memory",
+        "relation_name": "\"memory\".\"marts\".\"Order_Items\"",
+        "schema_name": "marts"
+      },
+      "primary_entity": null
+    },
+    {
+      "config": {
+        "meta": {}
+      },
+      "defaults": {
+        "agg_time_dimension": "ordered_at"
+      },
+      "description": "",
+      "dimensions": [
+        {
+          "config": {
+            "meta": {}
+          },
+          "datatype": null,
+          "description": "",
+          "expr": null,
+          "is_partition": false,
+          "label": null,
+          "metadata": null,
+          "name": "ordered_at",
+          "type": "time",
+          "type_params": {
+            "time_granularity": "day",
+            "validity_params": null
+          }
+        }
+      ],
+      "entities": [
+        {
+          "config": {
+            "meta": {}
+          },
+          "description": "",
+          "expr": "order_id",
+          "label": null,
+          "metadata": null,
+          "name": "order",
+          "role": null,
+          "type": "primary"
+        },
+        {
+          "config": {
+            "meta": {}
+          },
+          "description": "",
+          "expr": "customer_id",
+          "label": null,
+          "metadata": null,
+          "name": "customer",
+          "role": null,
+          "type": "foreign"
+        }
+      ],
+      "label": null,
+      "measures": [],
+      "metadata": null,
+      "name": "orders",
+      "node_relation": {
+        "alias": "orders",
+        "database": "memory",
+        "relation_name": "\"memory\".\"marts\".\"orders\"",
+        "schema_name": "marts"
+      },
+      "primary_entity": null
+    }
+  ]
+}

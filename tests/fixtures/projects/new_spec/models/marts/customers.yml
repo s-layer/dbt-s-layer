@@ -1,0 +1,22 @@
+models:
+  - name: customers
+    latest_version: 2
+    versions:
+      - v: 2
+    semantic_model:
+      enabled: true
+    agg_time_dimension: ordered_at
+    columns:
+      - name: customer_id
+        entity:
+          type: primary
+          name: cust
+      - name: ordered_at
+        granularity: day
+        dimension:
+          type: time
+    metrics:
+      - name: cust_total
+        type: simple
+        agg: sum
+        expr: amount
