@@ -8,13 +8,14 @@ import shutil
 import subprocess
 import sys
 import textwrap
+import time
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
 import pytest
-from dbt_s_layer._hook import is_semantic_yaml, select_projects
 from typer.testing import CliRunner
 
+from dbt_s_layer._hook import is_semantic_yaml, select_projects
 from dbt_s_layer.cli import app
 from tests.conftest import ARTIFACTS
 
@@ -238,9 +239,11 @@ SEMANTIC_FILE = "core_export/models/marts/orders.yml"
 
 def _edit(project: Path) -> None:
     """Make the semantic YAML newer than the artifacts, as an edit before commit does."""
-    path = project / "models" / "marts" / "orders.yml"
-    stamp = (project / "target" / "semantic_manifest.json").stat().st_mtime + 10
-    os.utime(path, (stamp, stamp))
+    now = time.time()
+    for name in ("semantic_manifest.json", "manifest.json"):
+        os.utime(project / "target" / name, (now - 60, now - 60))
+    yaml = project / "models" / "marts" / "orders.yml"
+    os.utime(yaml, (now - 30, now - 30))
 
 
 def _hook(*args: str | Path) -> Result:

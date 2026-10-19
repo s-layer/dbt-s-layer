@@ -106,6 +106,58 @@ def check(
     raise typer.Exit(code=_commands.run_check(options))
 
 
+@app.command("pre-commit")
+def pre_commit(
+    files: Annotated[
+        list[Path] | None,
+        typer.Argument(
+            help="Changed files (pre-commit passes the staged ones). Only semantic YAML, "
+            "dbt_project.yml and generated files trigger a run.",
+            show_default=False,
+        ),
+    ] = None,
+    project_dir: Annotated[
+        Path | None,
+        typer.Option(
+            "--project-dir",
+            help="The dbt project (default: the nearest dbt_project.yml above each file).",
+            file_okay=False,
+        ),
+    ] = None,
+    output_dir: Annotated[Path | None, _OUTPUT_DIR] = None,
+    target: Annotated[str | None, _TARGET] = None,
+    adapter: Annotated[str | None, _ADAPTER] = None,
+    profiles_dir: Annotated[Path | None, _PROFILES_DIR] = None,
+    dbt: Annotated[
+        str | None,
+        typer.Option(
+            "--dbt",
+            help="dbt executable that parses the project (default: dbtf if on PATH, else dbt).",
+        ),
+    ] = None,
+    parse: Annotated[
+        bool,
+        typer.Option(
+            "--parse/--no-parse",
+            help="Run `dbt parse` before generating (--no-parse: something else parses).",
+        ),
+    ] = True,
+) -> None:
+    """Parse and regenerate when semantic YAML changed; exit 1 if files changed (for pre-commit)."""
+    from dbt_s_layer import _hook
+
+    options = _hook.HookOptions(
+        output_dir=output_dir or _paths.DEFAULT_OUTPUT_DIR,
+        project_dir=project_dir,
+        target=target,
+        adapter=adapter,
+        profiles_dir=profiles_dir,
+        dbt=dbt,
+        parse=parse,
+    )
+    raise typer.Exit(code=_hook.run_hook(files or [], options))
+
+
 @app.command()
 def doctor(
     project_dir: Annotated[

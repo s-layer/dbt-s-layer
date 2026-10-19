@@ -84,22 +84,31 @@ def _summary(diff: OutputDiff) -> str:
     return ", ".join(parts)
 
 
-def run_generate(options: Options) -> int:
-    """Write the generated files; return the exit code."""
+def generate_project(options: Options) -> tuple[Path, OutputDiff] | None:
+    """
+    Write the generated files and print the summary line.
+
+    Return the output directory and what changed, or None after printing an error.
+    """
     try:
         files, output_dir = _render(options)
         diff = apply_output(files, output_dir)
     except DbtSLayerError as exc:
         _err(f"ERROR: {exc}")
-        return 1
+        return None
     except OSError as exc:
         _err(f"ERROR: could not write to the output directory: {exc}")
-        return 1
+        return None
     if diff.clean:
         _out(f"{output_dir} is up to date ({_count(len(files))}).")
     else:
         _out(f"Generated {_count(len(files))} in {output_dir} ({_summary(diff)}).")
-    return 0
+    return output_dir, diff
+
+
+def run_generate(options: Options) -> int:
+    """Write the generated files; return the exit code."""
+    return 1 if generate_project(options) is None else 0
 
 
 def run_check(options: Options) -> int:
