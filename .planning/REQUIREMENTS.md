@@ -102,7 +102,7 @@
 | OUTPT-05 | Phase 3 | Pending |
 | CLI-01 | Phase 3 | Pending |
 | CLI-02 | Phase 3 | Pending |
-| CLI-03 | Phase 0 | Pending |
+| CLI-03 | Phase 0 | Partial (dbtf + metricflow checks done; manifest freshness in Phase 1, output dir in Phase 3) |
 | CLI-04 | Phase 3 | Pending |
 | CLI-05 | Phase 1 | Pending |
 | HOOK-01 | Phase 5 | Pending |

@@ -1,9 +1,9 @@
 ---
 phase: 0
 slug: foundation-governance
-status: draft
-nyquist_compliant: false
-wave_0_complete: false
+status: complete
+nyquist_compliant: true
+wave_0_complete: true
 created: 2026-04-21
 ---
 
@@ -38,13 +38,13 @@ created: 2026-04-21
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| 0-01-01 | 01 | 1 | — | — | N/A | structural | `test -f pyproject.toml && uv run python -c "import dbt_s_layer"` | ❌ W0 | ⬜ pending |
-| 0-01-02 | 01 | 1 | — | — | N/A | structural | `uv run pytest` | ❌ W0 | ⬜ pending |
-| 0-02-01 | 02 | 1 | — | — | N/A | structural | `test -f .pre-commit-config.yaml && prek run --all-files` | ❌ W0 | ⬜ pending |
-| 0-03-01 | 03 | 2 | CLI-03 | — | N/A | integration | `uv run dbt-s-layer --help` | ❌ W0 | ⬜ pending |
-| 0-03-02 | 03 | 2 | CLI-03 | — | N/A | integration | `uv run dbt-s-layer doctor --help` | ❌ W0 | ⬜ pending |
-| 0-03-03 | 03 | 2 | CLI-03 | — | N/A | unit | `uv run pytest tests/test_doctor.py` | ❌ W0 | ⬜ pending |
-| 0-04-01 | 04 | 3 | — | — | N/A | structural | `test -f spike/verify_stack.py && uv run python spike/verify_stack.py` | ❌ W0 | ⬜ pending |
+| 0-01-01 | 01 | 1 | — | — | N/A | structural | `test -f pyproject.toml && uv run python -c "import dbt_s_layer"` | ✅ | ✅ green |
+| 0-01-02 | 01 | 1 | — | — | N/A | structural | `uv run pytest` | ✅ | ✅ green |
+| 0-02-01 | 02 | 1 | — | — | N/A | structural | `test -f .pre-commit-config.yaml && prek run --all-files` | ✅ | ✅ green |
+| 0-03-01 | 03 | 2 | CLI-03 | — | N/A | integration | `uv run dbt-s-layer --help` | ✅ | ✅ green |
+| 0-03-02 | 03 | 2 | CLI-03 | — | N/A | integration | `uv run dbt-s-layer doctor --help` | ✅ | ✅ green |
+| 0-03-03 | 03 | 2 | CLI-03 | — | N/A | unit | `uv run pytest tests/test_doctor.py` | ✅ | ✅ green |
+| 0-04-01 | 04 | 3 | — | — | N/A | structural | `test -f spike/verify_stack.py && uv run python spike/verify_stack.py` | ✅ | ✅ green |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
