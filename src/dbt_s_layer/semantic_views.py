@@ -314,7 +314,7 @@ class _Builder:
             keys.append(_Key(model, entity.name, entity.type, column))
         return keys
 
-    def _closure(self, root: str) -> tuple[list[str], list[RelationshipSpec]]:
+    def _closure(self, root: str, warnings: set[str]) -> tuple[list[str], list[RelationshipSpec]]:
         # model -> the model it was joined from
         joined_from: dict[str, str | None] = {root: None}
         relationships: list[RelationshipSpec] = []
@@ -329,7 +329,7 @@ class _Builder:
                         if parent.model in joined_from:
                             first = joined_from[parent.model]
                             if first is not None:
-                                self.warnings.add(
+                                warnings.add(
                                     f"semantic views: sem__{root} reaches semantic model "
                                     f"{parent.model!r} through {first!r} and {current!r}; kept "
                                     f"the join from {first!r} (a semantic view keeps one join "
@@ -516,8 +516,15 @@ class _Builder:
 
     # views
 
-    def view(self, root: str) -> SemanticViewSpec:
-        order, relationships = self._closure(root)
+    def view(self, root: str) -> tuple[SemanticViewSpec, set[str]]:
+        """
+        Describe the semantic view of `root`, with the warnings building it raised.
+
+        The warnings are returned, not added to `self.warnings`, so a view that is
+        then skipped reports only why it was skipped.
+        """
+        warnings: set[str] = set()
+        order, relationships = self._closure(root, warnings)
         metrics = sorted(
             (m for m in self.metrics.values() if m.table == root), key=lambda m: m.name
         )
@@ -562,7 +569,7 @@ class _Builder:
                 if e.type in _JOIN_TYPES and e.name not in taken
             ]
             dimensions += sorted(table_dims, key=lambda d: d.name)
-        return SemanticViewSpec(
+        spec = SemanticViewSpec(
             name=root,
             tables=tuple(tables),
             relationships=tuple(relationships),
@@ -571,6 +578,7 @@ class _Builder:
             derived_metrics=tuple(derived),
             comment=_description(self.models[root].description),
         )
+        return spec, warnings
 
 
 def _derived_table(metric: DerivedMetricSpec) -> str:
@@ -596,8 +604,13 @@ def _substitute(expr: str, refs: Mapping[str, MetricRef]) -> tuple[str | MetricR
 def build_semantic_views(project: SemanticProject) -> SemanticViewBuild:
     """Describe one semantic view per semantic model, sorted by name."""
     builder = _Builder(project)
-    views = tuple(builder.view(name) for name in sorted(builder.models))
-    return SemanticViewBuild(views=views, warnings=tuple(sorted(builder.warnings)))
+    views: list[SemanticViewSpec] = []
+    warnings = set(builder.warnings)
+    for name in sorted(builder.models):
+        view, view_warnings = builder.view(name)
+        views.append(view)
+        warnings |= view_warnings
+    return SemanticViewBuild(views=tuple(views), warnings=tuple(sorted(warnings)))
 
 
 # --- models for the output directory ------------------------------------------------
@@ -650,16 +663,18 @@ def render_semantic_views(project: SemanticProject, *, adapter: str) -> Semantic
         )
     builder = _Builder(project)
     models: list[SemanticViewModel] = []
-    skipped: list[str] = []
+    warnings = set(builder.warnings)
     for name in sorted(builder.models):
         # One semantic model Snowflake cannot hold must not stop the others, or the exports.
         try:
-            view = builder.view(name)
+            view, view_warnings = builder.view(name)
             body = render(view)
         except SemanticViewError as exc:
+            # Only the skip is reported: the view's own warnings describe a view not written.
             reason = str(exc).removeprefix(f"sem__{name}: ")
-            skipped.append(f"semantic views: skipped sem__{name}: {reason}")
+            warnings.add(f"semantic views: skipped sem__{name}: {reason}")
             continue
+        warnings |= view_warnings
         models.append(
             SemanticViewModel(
                 semantic_model=view.name,
@@ -670,7 +685,6 @@ def render_semantic_views(project: SemanticProject, *, adapter: str) -> Semantic
                 body=body,
             )
         )
-    warnings = {*builder.warnings, *skipped}
     if (
         adapter == "snowflake"
         and snowflake.MATERIALIZATION_MACRO not in project.dbt_manifest.macros
