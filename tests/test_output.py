@@ -800,6 +800,59 @@ def test_earlier_semantic_views_do_not_clash(make_project: MakeProject) -> None:
     assert [n for n in files if n.startswith("sem__")] == SEM_FILES["fusion_export"]
 
 
+# --- one bad semantic view does not stop generate (review round 1) ------------------
+
+
+def _shadowing_dimension(raw: dict[str, Any]) -> None:
+    """Give `orders` a dimension `amount` that would capture SUM(amount) in revenue."""
+    sm = next(s for s in raw["semantic_models"] if s["name"] == "orders")
+    status = next(d for d in sm["dimensions"] if d["name"] == "status")
+    sm["dimensions"].append({**status, "name": "amount", "expr": "amount * 100"})
+
+
+def _metric_named_like_a_dimension(raw: dict[str, Any]) -> None:
+    """Add a metric `status` on `orders`, which has a dimension `status`."""
+    revenue = next(m for m in raw["metrics"] if m["name"] == "revenue")
+    metric = json.loads(json.dumps(revenue))
+    metric["name"] = metric["label"] = "status"
+    metric["type_params"]["expr"] = "status"
+    metric["type_params"]["metric_aggregation_params"].update(agg="max", expr="status")
+    raw["metrics"].append(metric)
+
+
+SHADOWING_WARNING = (
+    "semantic views: skipped sem__orders: dimension orders.amount ('amount * 100') has the "
+    "name of a column that metric orders.revenue uses ('SUM(amount)'). Snowflake resolves the "
+    "name to the dimension, not the column, which would change revenue. Rename the dimension, "
+    "or make its expr exactly 'amount'."
+)
+CLASH_WARNING = (
+    "semantic views: skipped sem__orders: metric 'status' has the same name as a dimension of "
+    "semantic model 'orders'; a semantic view cannot hold both. Rename one of them."
+)
+
+
+@pytest.mark.parametrize(
+    ("mutate", "warning"),
+    [
+        (_shadowing_dimension, SHADOWING_WARNING),
+        (_metric_named_like_a_dimension, CLASH_WARNING),
+    ],
+)
+def test_a_semantic_view_error_skips_only_that_view(
+    mutate: Callable[[dict[str, Any]], None], warning: str, make_project: MakeProject
+) -> None:
+    project_dir = make_project("fusion_export")
+    _semantic(project_dir, mutate)
+    files = render_output(load_project(project_dir))
+    expected = [f for f in SEM_FILES["fusion_export"] if f != "sem__orders.sql"]
+    assert [n for n in files if n.startswith("sem__")] == expected
+    assert [n for n in files if n.startswith("exp__")] == EXPORT_FILES
+    assert "sem__orders" not in files[SCHEMA_FILE]
+    assert warning in files.warnings
+    assert list(files.warnings) == sorted(files.warnings)
+
+
 @pytest.mark.parametrize("set_name", SNOWFLAKE_SETS)
 def test_installed_package_in_the_snowflake_fixture(
     set_name: str, make_project: MakeProject

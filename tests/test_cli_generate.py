@@ -358,6 +358,28 @@ def test_generate_semantic_views_for_snowflake(project_dir: Path) -> None:
     )
 
 
+def test_a_semantic_view_error_is_a_warning(make_project: MakeProject) -> None:
+    # Review round 1: one semantic model Snowflake cannot hold does not stop the rest.
+    project_dir = make_project("fusion_export")
+    path = project_dir / "target" / "semantic_manifest.json"
+    raw: dict[str, Any] = json.loads(path.read_text())
+    sm = next(s for s in raw["semantic_models"] if s["name"] == "orders")
+    status = next(d for d in sm["dimensions"] if d["name"] == "status")
+    sm["dimensions"].append({**status, "name": "amount", "expr": "amount * 100"})
+    path.write_text(json.dumps(raw))
+    result = _invoke("generate", "--project-dir", project_dir)
+    assert result.exit_code == 0, result.output
+    assert any(
+        line.startswith("WARN semantic views: skipped sem__orders: dimension orders.amount")
+        for line in result.output.splitlines()
+    )
+    listing = _listing(project_dir / "models" / "semantic")
+    assert "sem__orders.sql" not in listing
+    assert "sem__customers.sql" in listing
+    assert "exp__revenue_by_day__exp_revenue_by_day.sql" in listing
+    assert _invoke("check", "--project-dir", project_dir).exit_code == 0
+
+
 def test_check_after_switching_to_snowflake(project_dir: Path) -> None:
     assert _invoke("generate", "--project-dir", project_dir).exit_code == 0
     result = _invoke("check", "--project-dir", project_dir, "--adapter", "snowflake")
