@@ -112,6 +112,13 @@ def _declarations(data: dict[str, object], file: Path) -> tuple[bool, list[Decla
         counts = True
         config = entry["semantic_model"]
         name = entry.get("name")
+        model_config = entry.get("config")
+        if (
+            isinstance(model_config, dict)
+            and cast("dict[str, object]", model_config).get("enabled") is False
+        ):
+            # A disabled model takes its semantic model with it.
+            continue
         if isinstance(config, dict):
             config = cast("dict[str, object]", config)
             enabled = config.get("enabled", True) is not False

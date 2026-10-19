@@ -45,8 +45,9 @@ class ArtifactCheck:
     project: SemanticProject
     warnings: tuple[str, ...]
     # The warnings that say a semantic model the YAML declares is missing from
-    # semantic_manifest.json (also in `warnings`).
-    missing: tuple[str, ...] = ()
+    # semantic_manifest.json because the engine that wrote it does not read that
+    # model's spec (also in `warnings`). Other missing ones dbt disabled itself.
+    dropped: tuple[str, ...] = ()
 
 
 def _missing_hint(declared: DeclaredSemanticModel, producer: str) -> str:
@@ -137,15 +138,18 @@ def check_artifacts(project_dir: Path) -> ArtifactCheck:
 
     present = {sm.name.lower() for sm in project.semantic_manifest.semantic_models}
     warnings = list(scan.warnings)
-    missing: list[str] = []
+    dropped: list[str] = []
     reported: set[str] = set()
     for declared in sorted(scan.declared_semantic_models, key=lambda d: (d.name, str(d.file))):
         if declared.name in present or declared.name in reported:
             continue
         reported.add(declared.name)
-        missing.append(
+        hint = _missing_hint(declared, project.producer)
+        warning = (
             f"semantic model {declared.name!r} is declared in {_rel(declared.file, project_dir)} "
-            f"but missing from {SEMANTIC_MANIFEST} (produced by {project.producer})"
-            f"{_missing_hint(declared, project.producer)}"
+            f"but missing from {SEMANTIC_MANIFEST} (produced by {project.producer}){hint}"
         )
-    return ArtifactCheck(project=project, warnings=(*warnings, *missing), missing=tuple(missing))
+        warnings.append(warning)
+        if hint:
+            dropped.append(warning)
+    return ArtifactCheck(project=project, warnings=tuple(warnings), dropped=tuple(dropped))

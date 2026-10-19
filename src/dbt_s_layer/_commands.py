@@ -33,8 +33,9 @@ class Options:
     target: str | None = None
     adapter: str | None = None
     profiles_dir: Path | None = None
-    # Refuse to write when semantic_manifest.json lacks a declared semantic model,
-    # instead of warning: the pre-commit hook would otherwise remove its files.
+    # Refuse to write when the engine that wrote semantic_manifest.json left out a
+    # declared semantic model, instead of warning: the pre-commit hook would
+    # otherwise remove its files.
     missing_is_error: bool = False
 
 
@@ -48,7 +49,7 @@ def _err(message: str) -> None:
 
 def _render(options: Options) -> tuple[RenderedOutput, Path]:
     checked = check_artifacts(options.project_dir)
-    refused = checked.missing if options.missing_is_error else ()
+    refused = checked.dropped if options.missing_is_error else ()
     for warning in checked.warnings:
         if warning not in refused:
             _err(f"WARN {warning}")

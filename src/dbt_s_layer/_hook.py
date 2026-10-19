@@ -15,6 +15,7 @@ parsed with dbt Core. `dbt parse` and `generate` are given the same profiles.yml
 
 from __future__ import annotations
 
+import functools
 import os
 import re
 import shutil
@@ -24,7 +25,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from dbt_s_layer._doctor import detect_engines
+from dbt_s_layer._doctor import Detection, detect_engines
 from dbt_s_layer._paths import resolve_output_dir
 from dbt_s_layer._project_yaml import legacy_declaration, local_packages
 from dbt_s_layer.errors import ProfileError
@@ -197,7 +198,7 @@ def _choose_dbt(project: Path, options: HookOptions, cwd: Path) -> str | None:
                 "the project, or pass --no-parse if something else runs `dbt parse` first."
             )
         return dbt
-    found = detect_engines()
+    found = _engines()
     for engine in found.engines:
         if engine.kind == "dbt Core" and engine.supported:
             return engine.path
@@ -296,8 +297,15 @@ def _finish_parse(parse: _Parse) -> bool:
     return False
 
 
+@functools.cache
+def _engines() -> Detection:
+    # `dbt --version` takes seconds with dbt Core, so probe once per run.
+    return detect_engines()
+
+
 def run_hook(files: Sequence[Path], options: HookOptions) -> int:
     """Parse and regenerate every project the files call for; 1 if anything changed or failed."""
+    _engines.cache_clear()
     cwd = Path.cwd()
     projects = select_projects(
         files, project_dir=options.project_dir, output_dir=options.output_dir, cwd=cwd
@@ -324,7 +332,7 @@ def run_hook(files: Sequence[Path], options: HookOptions) -> int:
                 target=options.target,
                 adapter=options.adapter,
                 profiles_dir=prepared.profiles_dir,
-                # A parse that lost a declared semantic model must not remove its files.
+                # A semantic model the engine dropped (wrong spec) must not lose its files.
                 missing_is_error=True,
             )
         )
