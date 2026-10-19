@@ -264,6 +264,8 @@ def test_identical_saved_queries_render_identical_sql(
         original = next(q for q in raw["saved_queries"] if q["name"] == "items_by_country")
         clone = json.loads(json.dumps(original))
         clone["name"] = "items_copy"
+        # Its own alias, so the two exports do not build the same relation.
+        clone["exports"][0]["config"]["alias"] = "items_copy"
         raw["saved_queries"].append(clone)
 
     def copy_dbt(raw: dict[str, Any]) -> None:
@@ -274,7 +276,8 @@ def test_identical_saved_queries_render_identical_sql(
     models = _by_file(render_exports(load_project(_mutate(make_project, set_name, copy, copy_dbt))))
     original = models["exp__items_by_country__exp_items_by_country.sql"].body
     assert "subq_" in original
-    assert models["exp__items_copy__exp_items_by_country.sql"].body == original
+    copy_body = models["exp__items_copy__exp_items_by_country.sql"].body
+    assert copy_body.replace("alias='items_copy'", "alias='exp_items_by_country'") == original
 
 
 @pytest.mark.parametrize("set_name", EXPORT_SETS)
@@ -380,19 +383,14 @@ def test_unknown_export_as(make_project: MakeProject) -> None:
 
 
 def test_duplicate_export_names(make_project: MakeProject) -> None:
+    # Two exports of one saved query with the same name share a file name.
     def rename(raw: dict[str, Any]) -> None:
         sq = next(q for q in raw["saved_queries"] if q["name"] == "revenue_by_day")
         sq["exports"][1]["name"] = "exp_revenue_by_day"
+        sq["exports"][1]["config"]["alias"] = "other_alias"
 
-    def rename_dbt(raw: dict[str, Any]) -> None:
-        raw["saved_queries"]["saved_query.fx.revenue_by_day"]["exports"][1]["name"] = (
-            "exp_revenue_by_day"
-        )
-
-    project = load_project(_mutate(make_project, "core_export", rename, rename_dbt))
-    with pytest.raises(
-        ExportRenderError, match=r"exp__revenue_by_day__exp_revenue_by_day\.sql.*both"
-    ):
+    project = load_project(_mutate(make_project, "core_export", rename))
+    with pytest.raises(ExportRenderError, match=r"__exp_revenue_by_day\.sql.*both"):
         render_exports(project)
 
 
@@ -429,7 +427,7 @@ def test_duplicate_relations_are_refused(make_project: MakeProject) -> None:
             raw["saved_queries"][f"saved_query.fx.{key}"]["exports"][0]["name"] = "daily"
 
     project = load_project(_mutate(make_project, "core_export", rename, rename_dbt))
-    with pytest.raises(ExportRenderError, match=r"alias 'daily'.*cumulative_revenue.*region"):
+    with pytest.raises(ExportRenderError, match=r"cumulative_revenue.*region.*alias 'daily'"):
         render_exports(project)
 
 

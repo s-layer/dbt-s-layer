@@ -39,12 +39,12 @@ if TYPE_CHECKING:
     from dbt_s_layer.artifacts import DbtSavedQuery
     from dbt_s_layer.project import SemanticProject
 
-_SHARED: dict[int, MetricFlowEngine] = {}
 Materialization = Literal["table", "view"]
 
 # Export names become part of a file name and a dbt model name, and metricflow
 # does not validate them (it does validate saved query names).
 _SAFE_NAME_RE = re.compile(r"[A-Za-z0-9_]+")
+_JINJA_RE = re.compile(r"\{[{%]")
 
 # dbt adapter_type -> metricflow dialect.
 _DIALECTS: dict[str, tuple[SqlEngine, type[SqlPlanRenderer]]] = {
@@ -140,24 +140,42 @@ def _dbt_saved_query(project: SemanticProject, name: str) -> DbtSavedQuery:
     return matches[0]
 
 
-def _materialized(dbt_sq: DbtSavedQuery, export: str) -> tuple[Materialization, str | None]:
+def _materialized(
+    dbt_sq: DbtSavedQuery, export: PydanticExport
+) -> tuple[Materialization, str | None]:
     """
     Resolve `export_as` and `schema` from what the user wrote.
 
     The export's own config wins over the saved query's. Read from manifest.json
     because Fusion 2.0.8 does not apply a saved query's `export_as` to its exports.
+    `unrendered_config` holds the user's text, Jinja included, so a templated
+    value is taken from the rendered config instead.
     """
-    unrendered: dict[str, object] = {}
-    for entry in dbt_sq.exports:
-        if entry.name == export:
-            unrendered = entry.unrendered_config
-    export_as = unrendered.get("export_as") or dbt_sq.config.export_as or "table"
+    entries = [entry for entry in dbt_sq.exports if entry.name == export.name]
+    if len(entries) != 1:
+        raise ExportRenderError(
+            f"export {export.name!r} of saved query {dbt_sq.name!r} is in "
+            "semantic_manifest.json but not exactly once in manifest.json. Re-run `dbt parse`."
+        )
+    unrendered = entries[0].unrendered_config
+    rendered = {
+        "export_as": export.config.export_as.value,
+        "schema": export.config.schema_name,
+    }
+
+    def own(key: str) -> object:
+        value = unrendered.get(key)
+        if isinstance(value, str) and _JINJA_RE.search(value):
+            return rendered[key]
+        return value
+
+    export_as = own("export_as") or dbt_sq.config.export_as or "table"
     if export_as not in ("table", "view"):
         raise ExportRenderError(
-            f"export {export!r} of saved query {dbt_sq.name!r} sets export_as {export_as!r}; "
-            "dbt-s-layer generates 'table' and 'view' exports."
+            f"export {export.name!r} of saved query {dbt_sq.name!r} sets export_as "
+            f"{export_as!r}; dbt-s-layer generates 'table' and 'view' exports."
         )
-    schema = unrendered.get("schema") or dbt_sq.config.schema_name
+    schema = own("schema") or dbt_sq.config.schema_name
     return export_as, schema if isinstance(schema, str) else None
 
 
@@ -180,7 +198,7 @@ def _export_model(
             "only contain ASCII letters, digits and underscores, because they name the "
             "generated file and dbt model."
         )
-    materialized, schema = _materialized(dbt_sq, export.name)
+    materialized, schema = _materialized(dbt_sq, export)
     alias = export.config.alias or export.name
     file_name = f"exp__{saved_query.name}__{export.name}.sql"
     body = f"{_config_block(materialized, alias, schema)}\n\n{sql}\n"
@@ -221,6 +239,8 @@ def render_exports(
         ) from exc
 
     models: dict[str, ExportModel] = {}
+    # (schema, lowercased alias) -> model: dbt refuses two models on one relation.
+    relations: dict[tuple[str | None, str], ExportModel] = {}
     for saved_query in sorted(table.manifest.saved_queries, key=lambda sq: sq.name):
         if not saved_query.exports:
             continue
@@ -252,5 +272,15 @@ def render_exports(
                     f"saved query {other.saved_query!r} and export {model.export!r} of saved "
                     f"query {model.saved_query!r}. Rename one of them."
                 )
+            relation = (model.schema, model.alias.lower())
+            other = relations.get(relation)
+            if other is not None:
+                where = f"schema {model.schema!r}" if model.schema else "the target schema"
+                raise ExportRenderError(
+                    f"export {other.export!r} of saved query {other.saved_query!r} and export "
+                    f"{model.export!r} of saved query {model.saved_query!r} would both build "
+                    f"alias {model.alias!r} in {where}. Give one of them its own `alias`."
+                )
+            relations[relation] = model
             models[model.file_name] = model
     return tuple(models[name] for name in sorted(models))

@@ -132,14 +132,20 @@ def preflight(project: SemanticProject) -> None:
     Refuse a project whose own text already contains a reserved prefix.
 
     Checks every string in the semantic manifest (names, `expr`s, filters,
-    relations) and the name and alias of every node a semantic model reads:
+    relations) and the name and alias of every node a semantic model or time
+    spine reads:
     the only project text that can reach generated SQL.
     """
     for path, text in _strings(cast("object", project.semantic_manifest.dict()), ""):
         if _RESERVED_RE.search(text):
             raise _collision(f"semantic_manifest.json `{path}`", text)
-    for target in build_ref_map(project).values():
-        node = project.dbt_manifest.nodes[target.node_id]
+    config = project.semantic_manifest.project_configuration
+    spines = [ts.node_relation.relation_name for ts in config.time_spines]
+    spines += [legacy.location for legacy in config.time_spine_table_configurations]
+    node_ids = {target.node_id for target in build_ref_map(project).values()}
+    node_ids |= {n for rel in spines if (n := _time_spine_node(project, rel)) is not None}
+    for node_id in sorted(node_ids):
+        node = project.dbt_manifest.nodes[node_id]
         for field, text in (("name", node.name), ("alias", node.alias)):
             if _RESERVED_RE.search(text):
                 raise _collision(f"manifest.json node {node.unique_id} {field} {text!r}", text)

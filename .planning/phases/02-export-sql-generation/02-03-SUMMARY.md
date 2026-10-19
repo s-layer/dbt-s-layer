@@ -40,3 +40,10 @@ completed: 2026-10-19
 ## Manual check
 
 Generated the five models into a copy of `export_legacy`, then `dbt build` on DuckDB with dbt Core 1.12.6: all built (PASS=11), the `schema` exports landed in `marts_reporting` / `marts_sq_schema`, and `exp_region_country` depends on `model.fx.orders`, `model.fx.customers.v1` and `model.fx_dep.stores`.
+
+## Review round 1
+
+- Two exports that would build the same relation (same schema and alias, case-insensitive) now fail with both named; export aliases default to export names, which only need to be unique per saved query.
+- An export missing from manifest.json fails instead of silently losing its config.
+- A templated (`{{ ... }}`) `export_as` or `schema` in `unrendered_config` is taken from the rendered config.
+- Pre-flight also checks time-spine nodes; a leftover mutation-test line was removed.
