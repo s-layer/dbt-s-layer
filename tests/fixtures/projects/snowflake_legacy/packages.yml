@@ -1,0 +1,5 @@
+# The `git:` form: hub tarballs come from codeload.github.com, which some proxies refuse.
+packages:
+  - local: packages/fx_dep
+  - git: https://github.com/Snowflake-Labs/dbt_semantic_view.git
+    revision: v1.0.6

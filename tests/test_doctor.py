@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import subprocess
@@ -589,3 +590,45 @@ def test_doctor_cli_passes_output_dir(
     )
     assert result.exit_code == 0, result.output
     assert seen == [(project_dir, Path("models/x"))]
+
+
+# --- dbt_semantic_view (Phase 4) --------------------------------------------------------
+
+
+def test_doctor_reports_missing_semantic_view_package_on_snowflake(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    make_project: MakeProject,
+) -> None:
+    _engines_ok(monkeypatch)
+    assert run_doctor(make_project("fusion_export")) == 0
+    out = capsys.readouterr().out
+    assert "WARN dbt_semantic_view: not installed" in out
+    assert "packages.yml" in out
+
+
+def test_doctor_reports_installed_semantic_view_package(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    make_project: MakeProject,
+) -> None:
+    _engines_ok(monkeypatch)
+    project_dir = make_project("fusion_export")
+    path = project_dir / "target" / "manifest.json"
+    raw = json.loads(path.read_text())
+    raw["macros"] = {
+        "macro.dbt_semantic_view.materialization_semantic_view_snowflake": {"name": "m"}
+    }
+    path.write_text(json.dumps(raw))
+    assert run_doctor(project_dir) == 0
+    assert "OK  dbt_semantic_view: installed" in capsys.readouterr().out
+
+
+def test_doctor_says_nothing_about_the_package_off_snowflake(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    make_project: MakeProject,
+) -> None:
+    _engines_ok(monkeypatch)
+    assert run_doctor(make_project("core_export")) == 0
+    assert "dbt_semantic_view" not in capsys.readouterr().out

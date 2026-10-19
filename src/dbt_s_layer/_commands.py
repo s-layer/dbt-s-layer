@@ -21,7 +21,7 @@ from dbt_s_layer.staleness import check_artifacts
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from dbt_s_layer.output import OutputDiff
+    from dbt_s_layer.output import OutputDiff, RenderedOutput
 
 
 @dataclass(frozen=True)
@@ -43,7 +43,7 @@ def _err(message: str) -> None:
     print(message, file=sys.stderr)
 
 
-def _render(options: Options) -> tuple[dict[str, str], Path]:
+def _render(options: Options) -> tuple[RenderedOutput, Path]:
     checked = check_artifacts(options.project_dir)
     for warning in checked.warnings:
         _err(f"WARN {warning}")
@@ -62,6 +62,8 @@ def _render(options: Options) -> tuple[dict[str, str], Path]:
             project.project_dir, options.target, profiles_dir=options.profiles_dir
         )
     files = render_output(project, adapter=adapter, output_dir=output_dir)
+    for warning in files.warnings:
+        _err(f"WARN {warning}")
     return files, output_dir
 
 

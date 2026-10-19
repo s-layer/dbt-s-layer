@@ -290,3 +290,23 @@ def test_artifact_that_is_a_directory_is_invalid(tmp_path: Path) -> None:
     with pytest.raises(ArtifactInvalidError) as exc:
         read_dbt_manifest(path, project_dir=tmp_path)
     assert str(path) in str(exc.value)
+
+
+# --- macros (Phase 4: is dbt_semantic_view installed?) -----------------------
+
+
+def test_dbt_manifest_macros_are_ids(tmp_path: Path) -> None:
+    raw = _fixture_json("core_new", "manifest.json")
+    raw["macros"] = {
+        "macro.dbt_semantic_view.materialization_semantic_view_snowflake": {"name": "x"},
+        "macro.dbt.run_query": {"name": "run_query"},
+    }
+    manifest = read_dbt_manifest(_write_json(tmp_path / "manifest.json", raw), project_dir=tmp_path)
+    assert manifest.macros == frozenset(
+        {"macro.dbt_semantic_view.materialization_semantic_view_snowflake", "macro.dbt.run_query"}
+    )
+
+
+def test_dbt_manifest_without_macros(tmp_path: Path) -> None:
+    manifest = read_dbt_manifest(ARTIFACTS / "core_new" / "manifest.json", project_dir=tmp_path)
+    assert manifest.macros == frozenset()

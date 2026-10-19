@@ -1,0 +1,22 @@
+models:
+  - name: stores
+    semantic_model:
+      enabled: true
+    agg_time_dimension: opened_at
+    columns:
+      - name: store_id
+        entity:
+          type: primary
+          name: store
+      - name: region
+        dimension:
+          type: categorical
+      - name: opened_at
+        granularity: day
+        dimension:
+          type: time
+    metrics:
+      - name: store_count
+        type: simple
+        agg: count
+        expr: store_id

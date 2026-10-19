@@ -21,11 +21,11 @@
 
 ### Semantic View Codegen
 
-- [ ] **SEMVW-01**: Tool generates one `sem__<semantic_model_name>.sql` dbt model for each `semantic_model`, containing the DDL or materialisation call for the target warehouse's native semantic object type
-- [ ] **SEMVW-02**: Generated semantic view models for Snowflake target use the `dbt_semantic_view` package (Snowflake-Labs) materialisation, with entities, dimensions, and measures derived from the semantic model YAML
-- [ ] **SEMVW-03**: Generated semantic view models for Databricks target use the `dbt-databricks` metric view materialisation (alpha: `dbt-databricks==1.12.0a1`, PR databricks/dbt-databricks#1285), with entities, dimensions, and measures derived from the semantic model YAML
+- [x] **SEMVW-01**: Tool generates one `sem__<semantic_model_name>.sql` dbt model for each `semantic_model`, containing the DDL or materialisation call for the target warehouse's native semantic object type
+- [x] **SEMVW-02**: Generated semantic view models for Snowflake target use the `dbt_semantic_view` package (Snowflake-Labs) materialisation, with entities, dimensions, and measures derived from the semantic model YAML
+- [ ] **SEMVW-03**: Generated semantic view models for Databricks target use the `dbt-databricks` metric view materialisation (`dbt-databricks >= 1.12.0` (GA), PR databricks/dbt-databricks#1285), with entities, dimensions, and measures derived from the semantic model YAML
 - [ ] **SEMVW-04**: Generated semantic view models for DuckDB target use the `duckdb-semantic-views` extension (https://anentropic.github.io/duckdb-semantic-views/), delegating to its materialisation in the same pattern as the Snowflake adapter
-- [ ] **SEMVW-05**: Generated semantic view models include explicit `{{ ref() }}` and `{{ source() }}` calls for all upstream dbt nodes, so dbt's DAG parser registers correct lineage edges
+- [x] **SEMVW-05**: Generated semantic view models include explicit `{{ ref() }}` and `{{ source() }}` calls for all upstream dbt nodes, so dbt's DAG parser registers correct lineage edges
 
 ### File Output
 
@@ -57,8 +57,18 @@
 
 ### Semantic View Enhancements
 
-- **SEMVW-V2-01**: Full Databricks metric view support once upstream dbt package is GA
+- **SEMVW-V2-01**: ~~Full Databricks metric view support once upstream dbt package is GA~~ Withdrawn: metric views shipped GA in dbt-databricks 1.12.0, so full support is v1 scope (SEMVW-03)
 - **SEMVW-V2-02**: Adapter expansion beyond Snowflake/Databricks/DuckDB (BigQuery, Redshift, Postgres) — pull-driven based on user demand
+
+Semantic model features v1 leaves out of semantic views (each is skipped with a warning; Phase 4):
+
+- **SEMVW-V2-03**: Cumulative metrics in semantic views (Snowflake window metrics partition by the queried dimensions, not a time spine; exports cover them today)
+- **SEMVW-V2-04**: Conversion metrics in semantic views
+- **SEMVW-V2-05**: Metric filters (on a metric or its input) rendered as `CASE WHEN <filter> THEN <expr> END` inside the aggregate, with `{{ Dimension(...) }}` resolved against the view's columns
+- **SEMVW-V2-06**: Non-additive dimensions with `window_groupings` (MetricFlow takes the last rows per entity, Snowflake per queried dimensions)
+- **SEMVW-V2-07**: Natural entities and validity windows (SCD type 2), e.g. through `ASOF` relationships
+- **SEMVW-V2-08**: Derived and ratio metrics with offsets, filters, inputs from more than one semantic model, or derived inputs; and more than one join path to a table (Snowflake `USING`, a preview feature)
+- **SEMVW-V2-09**: `fill_nulls_with` / `join_to_timespine` on metrics (ignored today) and approximate discrete percentiles (skipped today)
 
 ### Tooling
 
@@ -90,11 +100,11 @@
 | EXPRT-03 | Phase 2 | Complete |
 | EXPRT-04 | Phase 2 | Complete |
 | EXPRT-05 | Phase 2 | Complete |
-| SEMVW-01 | Phase 4 | Pending |
-| SEMVW-02 | Phase 4 | Pending |
+| SEMVW-01 | Phase 4 | Complete (Snowflake; Databricks and DuckDB in Phases 6, 7) |
+| SEMVW-02 | Phase 4 | Complete |
 | SEMVW-03 | Phase 6 | Pending |
 | SEMVW-04 | Phase 7 | Pending |
-| SEMVW-05 | Phase 4 | Pending |
+| SEMVW-05 | Phase 4 | Complete |
 | OUTPT-01 | Phase 3 | Complete |
 | OUTPT-02 | Phase 3 | Complete |
 | OUTPT-03 | Phase 3 | Complete |
@@ -115,4 +125,4 @@
 
 ---
 *Requirements defined: 2026-04-19*
-*Last updated: 2026-04-19 after initial definition*
+*Last updated: 2026-10-19 after Phase 4*

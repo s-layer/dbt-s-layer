@@ -26,7 +26,13 @@ EXPORT_SETS = {
     "fusion_export": "Fusion 2.",
     "core_export": "dbt Core 1.",
 }
-SETS = {**BASE_SETS, **EXPORT_SETS}
+# Sets parsed on a Snowflake target with dbt_semantic_view installed (Phase 4).
+SNOWFLAKE_SETS = {
+    "fusion_snowflake": "Fusion 2.",
+    "core_snowflake": "dbt Core 1.",
+}
+SETS = {**BASE_SETS, **EXPORT_SETS, **SNOWFLAKE_SETS}
+SEMANTIC_VIEW_MACRO = "macro.dbt_semantic_view.materialization_semantic_view_snowflake"
 EXPORT_SAVED_QUERIES = {
     "cumulative_revenue",
     "items_by_country",
@@ -75,7 +81,12 @@ def test_semantic_manifest_has_orders_and_saved_query(set_name: str) -> None:
 @pytest.mark.parametrize("set_name", SETS)
 def test_manifest_is_trimmed(set_name: str) -> None:
     manifest = _load(set_name, "manifest.json")
-    assert set(manifest) == {"metadata", "nodes", "saved_queries", "semantic_models"}
+    assert set(manifest) - {"macros"} == {"metadata", "nodes", "saved_queries", "semantic_models"}
+    # Only the dbt_semantic_view materializations, by id, and only where it is installed.
+    assert ("macros" in manifest) == (set_name in SNOWFLAKE_SETS)
+    for macro_id, macro in manifest.get("macros", {}).items():
+        assert macro_id.startswith("macro.dbt_semantic_view.materialization_")
+        assert macro == {"unique_id": macro_id, "package_name": "dbt_semantic_view"}
     assert set(manifest["metadata"]) <= {
         "adapter_type",
         "dbt_schema_version",
@@ -181,3 +192,23 @@ def test_fusion_does_not_inherit_saved_query_export_as() -> None:
     # If a Fusion regen makes this fail, Fusion has fixed it: update the note.
     assert _export_configs("core_export")["exp_items_by_country"]["export_as"] == "view"
     assert _export_configs("fusion_export")["exp_items_by_country"]["export_as"] == "table"
+
+
+@pytest.mark.parametrize("set_name", SNOWFLAKE_SETS)
+def test_snowflake_sets_have_the_semantic_view_package(set_name: str) -> None:
+    manifest = _load(set_name, "manifest.json")
+    assert manifest["metadata"]["adapter_type"] == "snowflake"
+    assert SEMANTIC_VIEW_MACRO in manifest["macros"]
+
+
+@pytest.mark.parametrize("set_name", SNOWFLAKE_SETS)
+def test_snowflake_sets_cover_the_metric_mapping(set_name: str) -> None:
+    semantic = _load(set_name, "semantic_manifest.json")
+    assert _names(semantic["semantic_models"]) == {"customers", "order_items", "orders", "stores"}
+    kinds = {m["name"]: m["type"] for m in semantic["metrics"]}
+    assert kinds["average_order_value"] == "ratio"
+    assert kinds["revenue_doubled"] == "derived"
+    assert kinds["revenue_per_item"] == "derived"
+    assert kinds["revenue_cumulative"] == "cumulative"
+    assert kinds["revenue_p90"] == "simple"
+    assert kinds["latest_revenue"] == "simple"

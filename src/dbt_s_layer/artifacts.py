@@ -262,6 +262,15 @@ class DbtManifest(_ManifestModel):
     nodes: dict[str, ModelNode]
     semantic_models: dict[str, DbtSemanticModel] = {}
     saved_queries: dict[str, DbtSavedQuery] = {}
+    # Macro ids only: whether a package's materialization is installed.
+    macros: frozenset[str] = frozenset()
+
+    @field_validator("macros", mode="before")
+    @classmethod
+    def _macro_ids(cls, value: object) -> object:
+        if isinstance(value, dict):
+            return frozenset(str(k) for k in cast("dict[object, object]", value))
+        return value
 
     @field_validator("nodes", mode="before")
     @classmethod

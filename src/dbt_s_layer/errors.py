@@ -50,3 +50,7 @@ class ProfileError(DbtSLayerError):
 
 class ModelClashError(DbtSLayerError):
     """A generated model would clash with one of the user's own models."""
+
+
+class SemanticViewError(DbtSLayerError):
+    """A semantic model cannot be turned into a semantic view as it stands."""

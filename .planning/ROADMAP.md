@@ -2,7 +2,7 @@
 
 ## Overview
 
-dbt-s-layer is a Python codegen tool that reads dbt semantic YAML (via `semantic_manifest.json`) and emits two families of dbt models: warehouse-native semantic view models (`sem__*.sql`) and pre-aggregated export models (`exp__*.sql`). The journey starts with foundation and governance (Phase 0), builds the parsing pipeline that ingests the semantic manifest (Phase 1), then tackles the highest-risk unit early — MetricFlow-driven export SQL generation with sentinel-prefix `ref()` rewriting (Phase 2). Phase 3 delivers deterministic file output plus the `generate` / `check` / `doctor` CLI. With this foundation in place, Phase 4 wires up the primary v1 target (Snowflake semantic views via `dbt_semantic_view`). Phase 5 ships the pre-commit hook that keeps generated files in sync. Phases 6 and 7 add Databricks (metric view via `dbt-databricks` alpha) and DuckDB (custom materialisation) adapters. Phase 8 hardens the package for v1 release.
+dbt-s-layer is a Python codegen tool that reads dbt semantic YAML (via `semantic_manifest.json`) and emits two families of dbt models: warehouse-native semantic view models (`sem__*.sql`) and pre-aggregated export models (`exp__*.sql`). The journey starts with foundation and governance (Phase 0), builds the parsing pipeline that ingests the semantic manifest (Phase 1), then tackles the highest-risk unit early — MetricFlow-driven export SQL generation with sentinel-prefix `ref()` rewriting (Phase 2). Phase 3 delivers deterministic file output plus the `generate` / `check` / `doctor` CLI. With this foundation in place, Phase 4 wires up the primary v1 target (Snowflake semantic views via `dbt_semantic_view`). Phase 5 ships the pre-commit hook that keeps generated files in sync. Phases 6 and 7 add Databricks (metric view via `dbt-databricks` >= 1.12.0, GA) and DuckDB (custom materialisation) adapters. Phase 8 hardens the package for v1 release.
 
 **Risk callout:** Phase 2 (MetricFlow internals + sentinel rewrite) and Phase 4 (Snowflake `SEMANTIC VIEW` DDL + `dbt_semantic_view` package integration) are flagged HIGH risk by research. Both phases should trigger `/gsd-research-phase` before planning to verify upstream APIs and current grammar.
 
@@ -18,9 +18,9 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 1: Parsing Pipeline** - Read `semantic_manifest.json` + `manifest.json`, build ref/source sentinel map
 - [x] **Phase 2: Export SQL Generation** - MetricFlow engine integration + sentinel-prefix `ref()` rewriting (HIGH RISK)
 - [x] **Phase 3: File Output + CLI** - Atomic byte-stable writer, `generate` / `check` commands, companion YAML
-- [ ] **Phase 4: Snowflake Adapter** - `sem__*.sql` via `dbt_semantic_view` package (HIGH RISK)
+- [x] **Phase 4: Snowflake Adapter** - `sem__*.sql` via `dbt_semantic_view` package (HIGH RISK)
 - [ ] **Phase 5: Pre-Commit Hook** - `.pre-commit-hooks.yaml` triggering regeneration on YAML changes
-- [ ] **Phase 6: Databricks Adapter** - `sem__*.sql` via `dbt-databricks` metric view materialisation (alpha: 1.12.0a1)
+- [ ] **Phase 6: Databricks Adapter** - `sem__*.sql` via `dbt-databricks` metric view materialisation (dbt-databricks >= 1.12.0, GA)
 - [ ] **Phase 7: DuckDB Adapter** - `sem__*.sql` via `duckdb-semantic-views` extension
 - [ ] **Phase 8: v1 Release Hardening** - Docs, versioning, publish pipeline, final verification
 
@@ -98,8 +98,12 @@ Decimal phases appear between their surrounding integers in numeric order.
   2. Entities, dimensions, and measures in the generated config match the semantic YAML definitions
   3. Every upstream table reference in a generated semantic view model is expressed as `{{ ref(...) }}` or `{{ source(...) }}` so `dbt ls` and lineage tools see the correct DAG edges
   4. `dbt compile --target snowflake` succeeds on a fixture project whose generated `sem__*.sql` files are the only semantic models
-**Plans**: TBD
-**Research flag**: HIGH RISK — `/gsd-research-phase` required before planning. Must verify current Snowflake `CREATE SEMANTIC VIEW` grammar and the `dbt_semantic_view` package config schema.
+**Plans**: 4 plans
+- [x] 04-01-PLAN.md — Adapter-neutral semantic view IR and builder (join closure, element mapping, skips)
+- [x] 04-02-PLAN.md — Snowflake renderer, name shadowing check, snapshots
+- [x] 04-03-PLAN.md — `sem__` files in `generate`/`check`, clashes, warnings, package check, `doctor`
+- [x] 04-04-PLAN.md — Snowflake fixtures with `dbt_semantic_view`, compile test on both engines, README
+**Research**: done (04-RESEARCH.md). The package takes the raw `CREATE SEMANTIC VIEW` clause list, not a config schema, so criterion 2's "generated config" is the DDL body.
 
 ### Phase 5: Pre-Commit Hook
 **Goal**: Users can install one pre-commit entry that keeps their committed generated files perfectly in sync with edits to semantic YAML
@@ -112,7 +116,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Plans**: TBD
 
 ### Phase 6: Databricks Adapter
-**Goal**: Every `semantic_model` produces a `sem__*.sql` model that materialises as a Databricks metric view via the `dbt-databricks` package (alpha: `dbt-databricks==1.12.0a1`, databricks/dbt-databricks#1285), with correct DAG edges
+**Goal**: Every `semantic_model` produces a `sem__*.sql` model that materialises as a Databricks metric view via the `dbt-databricks` package (`dbt-databricks >= 1.12.0` (GA), databricks/dbt-databricks#1285), with correct DAG edges
 **Depends on**: Phase 4 (shares the adapter dispatch machinery)
 **Requirements**: SEMVW-03
 **Success Criteria** (what must be TRUE):
@@ -121,7 +125,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. Every upstream table reference is expressed as `{{ ref(...) }}` or `{{ source(...) }}` so DAG edges are correct
   4. `dbt run --target databricks` on a fixture project materialises every `sem__*.sql` as a Databricks metric view
 **Plans**: TBD
-**Research flag**: MEDIUM — working against an alpha package (1.12.0a1); verify metric view DDL config schema before planning.
+**Research flag**: MEDIUM — metric views shipped GA in dbt-databricks 1.12.0 (latest 1.12.7); verify the metric view config schema before planning.
 
 ### Phase 7: DuckDB Adapter
 **Goal**: DuckDB users (local dev, test) can materialise semantic models via the `duckdb-semantic-views` extension, using the same adapter-dispatch pattern as Snowflake
@@ -155,7 +159,7 @@ Phases execute in numeric order: 0 → 1 → 2 → 3 → 4 → 5 → 6 → 7 →
 | 1. Parsing Pipeline | 4/4 | Complete | 2026-10-19 |
 | 2. Export SQL Generation | 3/3 | Complete | 2026-10-19 |
 | 3. File Output + CLI | 3/3 | Complete | 2026-10-19 |
-| 4. Snowflake Adapter | 0/TBD | Not started | - |
+| 4. Snowflake Adapter | 4/4 | Complete | 2026-10-19 |
 | 5. Pre-Commit Hook | 0/TBD | Not started | - |
 | 6. Databricks Stub Adapter | 0/TBD | Not started | - |
 | 7. DuckDB Custom Materialisation | 0/TBD | Not started | - |
