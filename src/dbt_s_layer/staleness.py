@@ -78,7 +78,9 @@ def _mappings(value: object) -> list[dict[str, object]]:
     if not isinstance(value, list):
         return []
     return [
-        cast("dict[str, object]", item) for item in cast("list[object]", value) if isinstance(item, dict)
+        cast("dict[str, object]", item)
+        for item in cast("list[object]", value)
+        if isinstance(item, dict)
     ]
 
 
@@ -101,13 +103,17 @@ def _declarations(data: dict[str, object], file: Path) -> tuple[bool, list[Decla
             enabled = config is not False and config is not None
         if enabled and isinstance(name, str):
             declared.append(
-                DeclaredSemanticModel(name.lower(), file, legacy=False, versioned="versions" in entry)
+                DeclaredSemanticModel(
+                    name.lower(), file, legacy=False, versioned="versions" in entry
+                )
             )
 
     for entry in _mappings(data.get("semantic_models")):
         name = entry.get("name")
         config = entry.get("config")
-        disabled = isinstance(config, dict) and cast("dict[str, object]", config).get("enabled") is False
+        disabled = (
+            isinstance(config, dict) and cast("dict[str, object]", config).get("enabled") is False
+        )
         if isinstance(name, str) and not disabled:
             declared.append(DeclaredSemanticModel(name.lower(), file, legacy=True, versioned=False))
 
@@ -184,7 +190,9 @@ def check_artifacts(project_dir: Path) -> ArtifactCheck:
     if newer:
         newest = max(newer, key=lambda f: f.stat().st_mtime)
         others = len(newer) - 1
-        also = f" and {others} other semantic YAML file{'s' if others > 1 else ''}" if others else ""
+        also = (
+            f" and {others} other semantic YAML file{'s' if others > 1 else ''}" if others else ""
+        )
         raise StaleArtifactError(
             f"{semantic_manifest} is older than {_rel(newest, project_dir)}{also}. "
             f"Run `dbt parse` (dbt Core or Fusion) in {project_dir} to refresh it."
