@@ -345,6 +345,35 @@ def test_a_reserved_entity_name_is_quoted(
     assert re.search(r"order_items_src_10000\.order_id = subq_\d+\.order\n", plain), plain
 
 
+def _group_and_order_by_order(raw: dict[str, Any]) -> None:
+    query = next(q for q in raw["saved_queries"] if q["name"] == "items_by_country")
+    query["query_params"]["group_by"].append("Entity('order')")
+    query["query_params"]["order_by"] = ["Entity('order')"]
+
+
+@pytest.mark.parametrize("set_name", EXPORT_SETS)
+@pytest.mark.parametrize("adapter", sorted(QUOTED_ORDER))
+def test_a_reserved_entity_in_group_by_and_order_by_is_quoted(
+    adapter: str, set_name: str, make_project: MakeProject
+) -> None:
+    # Grouping and ordering by the entity `order` makes metricflow refer to the
+    # column by its bare alias: ORDER BY always (an alias reference), and GROUP BY
+    # on BigQuery, which groups by alias rather than by expression.
+    project = load_project(_mutate(make_project, set_name, _group_and_order_by_order))
+    body = _by_file(render_exports(project, adapter=adapter))[ITEMS].body
+    quoted = QUOTED_ORDER[adapter]
+    # The outermost SELECT names the output column...
+    assert f"\nSELECT\n  order_items_src_10000.order_id AS {quoted}\n" in body, body
+    # ...groups by it...
+    group_by = quoted if adapter == "bigquery" else "order_items_src_10000.order_id"
+    assert f"\nGROUP BY\n  {group_by}\n" in body, body
+    # ...and orders by its alias.
+    assert body.endswith(f"\nORDER BY {quoted}\n"), body
+    # The name never appears bare outside the comments metricflow writes.
+    sql = "\n".join(line for line in body.splitlines() if not line.lstrip().startswith("--"))
+    assert not re.search(r"(?<![\w\"`])order(?![\w\"`])", sql.replace(quoted, "_")), sql
+
+
 def test_unsupported_adapter(make_project: MakeProject) -> None:
     project = load_project(make_project("core_export"))
     with pytest.raises(ExportRenderError, match=r"'sqlserver'.*snowflake"):

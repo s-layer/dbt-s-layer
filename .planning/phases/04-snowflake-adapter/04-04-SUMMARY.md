@@ -45,3 +45,7 @@
 - That was also Fusion's dbt0101 warning on the same export ("no viable alternative at input
   ... AS order"): with the fix, Fusion 2.0.8 compiles snowflake_spec with no dbt0101.
 - Test committed red first: `test_a_reserved_entity_name_is_quoted` (4 sets x 8 adapters).
+- Review round 3: `test_a_reserved_entity_in_group_by_and_order_by_is_quoted` (2 export sets x 8
+  adapters) groups and orders `items_by_country` by `Entity('order')`, reaching
+  `visit_column_alias_reference_expr` (ORDER BY, every dialect) and `render_group_by_expr`
+  (BigQuery GROUP BY); disabling either hook turns it red (16 and 2 cases). No bug found.
