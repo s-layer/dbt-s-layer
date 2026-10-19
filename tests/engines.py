@@ -32,8 +32,9 @@ def _probe(path: str) -> tuple[Engine | None, str]:
 
 def find_engine(kind: str, variable: str, adapter: str) -> str | None:
     """
-    The engine in `variable` (a path), else on PATH: `dbtf` or a Fusion `dbt`, or a
-    dbt Core `dbt` that has `adapter` installed.
+    Find a `kind` engine: the path in `variable`, else one on PATH.
+
+    On PATH that is `dbtf` or a Fusion `dbt`, or a dbt Core `dbt` with `adapter` installed.
     """
     explicit = os.environ.get(variable)
     candidates = [explicit] if explicit else (["dbtf", "dbt"] if kind == "Fusion" else ["dbt"])
