@@ -1,0 +1,13 @@
+# The dbt-s-layer pre-commit hook (HOOK-01). See README "Pre-commit hook".
+- id: dbt-s-layer
+  name: dbt-s-layer generate
+  description: Parse the dbt project and regenerate dbt-s-layer models when semantic YAML changes.
+  entry: dbt-s-layer pre-commit
+  language: python
+  # pre-commit filters by name only; the hook reads each YAML file and skips those
+  # without semantic_models:, metrics: or saved_queries: keys. Generated files are
+  # included so a hand edit is put back.
+  files: (\.ya?ml|(^|/)(sem|exp)__[^/]*\.sql)$
+  # One process: pre-commit would otherwise split the files and run them in parallel.
+  require_serial: true
+  minimum_pre_commit_version: "3.0.0"

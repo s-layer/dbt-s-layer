@@ -424,9 +424,9 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def _hook_definition() -> dict[str, object]:
-    from ruamel.yaml import YAML
+    from dbt_s_layer._yaml import read_yaml
 
-    hooks = YAML(typ="safe").load((ROOT / ".pre-commit-hooks.yaml").read_text())
+    hooks = read_yaml(ROOT / ".pre-commit-hooks.yaml")
     assert isinstance(hooks, list)
     assert len(cast("list[object]", hooks)) == 1
     hook = cast("list[dict[str, object]]", hooks)[0]

@@ -131,26 +131,44 @@ def _find_dbt(option: str | None, cwd: Path) -> str | None:
     return shutil.which(option)
 
 
-def _parse(dbt: str, project: Path, options: HookOptions, cwd: Path) -> bool:
-    """Run `<dbt> parse` in `project`; on failure print its output and return False."""
+@dataclass(frozen=True)
+class _Parse:
+    """A `dbt parse` running in one project."""
+
+    shown: str
+    process: subprocess.Popen[str] | None
+
+
+def _start_parse(dbt: str, project: Path, options: HookOptions, cwd: Path) -> _Parse:
+    """Start `<dbt> parse` in `project`; on failure to start, print why."""
     command = [dbt, "parse"]
     if options.target is not None:
         command += ["--target", options.target]
     if options.profiles_dir is not None:
         command += ["--profiles-dir", str(_absolute(options.profiles_dir, cwd))]
-    shown = f"`{Path(dbt).name} parse`"
+    shown = f"`{Path(dbt).name} parse` in {_display(project, cwd)}"
     try:
-        result = subprocess.run(command, cwd=project, capture_output=True, text=True, check=False)
+        process = subprocess.Popen(
+            command, cwd=project, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
+        )
     except OSError as exc:
-        _err(f"ERROR: could not run {shown} in {_display(project, cwd)}: {exc}")
+        _err(f"ERROR: could not run {shown}: {exc}")
+        return _Parse(shown, None)
+    return _Parse(shown, process)
+
+
+def _finish_parse(parse: _Parse) -> bool:
+    """Wait for a parse; on failure print the end of its output and return False."""
+    if parse.process is None:
         return False
-    if result.returncode == 0:
+    output, _ = parse.process.communicate()
+    if parse.process.returncode == 0:
         return True
     _err(
-        f"ERROR: {shown} failed in {_display(project, cwd)} "
-        f"(exit code {result.returncode}). Last lines of its output:"
+        f"ERROR: {parse.shown} failed (exit code {parse.process.returncode}). "
+        "Last lines of its output:"
     )
-    for line in (result.stdout + result.stderr).strip().splitlines()[-_PARSE_OUTPUT_LINES:]:
+    for line in output.strip().splitlines()[-_PARSE_OUTPUT_LINES:]:
         _err(f"  {line}")
     _err("Fix the project, or pass --no-parse if something else runs `dbt parse` first.")
     return False
@@ -176,16 +194,20 @@ def run_hook(files: Sequence[Path], options: HookOptions) -> int:
             )
             return 1
 
+    # The first parse runs while the generator is imported (about a second each).
+    first = _start_parse(dbt, projects[0], options, cwd) if dbt is not None else None
     # Imported here: it loads metricflow, which a commit without semantic YAML never needs.
     from dbt_s_layer import _commands
 
     profiles_dir = _absolute(options.profiles_dir, cwd) if options.profiles_dir else None
     failed = False
     updated: list[str] = []
-    for project in projects:
-        if dbt is not None and not _parse(dbt, project, options, cwd):
-            failed = True
-            continue
+    for index, project in enumerate(projects):
+        if dbt is not None:
+            parse = first if index == 0 and first else _start_parse(dbt, project, options, cwd)
+            if not _finish_parse(parse):
+                failed = True
+                continue
         result = _commands.generate_project(
             _commands.Options(
                 project_dir=project,
