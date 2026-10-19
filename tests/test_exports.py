@@ -465,3 +465,42 @@ def test_jinja_in_unrendered_config_uses_the_rendered_value(make_project: MakePr
     view = models["exp__revenue_by_day__exp_revenue_by_day_view.sql"]
     assert (view.materialized, view.schema) == ("view", "reporting")
     assert "env_var" not in view.body
+
+
+# --- review round 2 -----------------------------------------------------------
+
+
+def test_duplicate_export_names_in_both_artifacts(make_project: MakeProject) -> None:
+    # What a user who names two exports alike actually gets: the duplicate is in
+    # both artifacts, so re-running `dbt parse` cannot help and the error must say so.
+    def rename(raw: dict[str, Any]) -> None:
+        sq = next(q for q in raw["saved_queries"] if q["name"] == "revenue_by_day")
+        sq["exports"][1]["name"] = "exp_revenue_by_day"
+        sq["exports"][1]["config"]["alias"] = "other_alias"
+
+    def rename_dbt(raw: dict[str, Any]) -> None:
+        raw["saved_queries"]["saved_query.fx.revenue_by_day"]["exports"][1]["name"] = (
+            "exp_revenue_by_day"
+        )
+
+    project = load_project(_mutate(make_project, "core_export", rename, rename_dbt))
+    with pytest.raises(ExportRenderError, match=r"more than one export named") as info:
+        render_exports(project)
+    assert "dbt parse" not in str(info.value)
+
+
+def test_duplicate_relations_ignore_schema_case(make_project: MakeProject) -> None:
+    # dbt compares relations case-insensitively, schema included.
+    def clash(raw: dict[str, Any]) -> None:
+        for sq in raw["saved_queries"]:
+            if sq["name"] == "items_by_country":
+                sq["exports"][0]["config"]["alias"] = "revenue_daily"
+                sq["exports"][0]["config"]["schema_name"] = "REPORTING"
+
+    def clash_dbt(raw: dict[str, Any]) -> None:
+        export = raw["saved_queries"]["saved_query.fx.items_by_country"]["exports"][0]
+        export["unrendered_config"]["schema"] = "REPORTING"
+
+    project = load_project(_mutate(make_project, "core_export", clash, clash_dbt))
+    with pytest.raises(ExportRenderError, match=r"alias 'revenue_daily'"):
+        render_exports(project)
