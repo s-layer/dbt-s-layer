@@ -72,6 +72,7 @@ The project targets two pain points for dbt Core users:
 | Sentinel prefix for ref() rewriting | Depends on only two narrow public MetricFlow surfaces; alternatives require subclassing frozen dataclasses or fragile name heuristics | — Pending |
 | Generated files committed to repo | Full transparency; readable by any dbt tooling; no runtime state | — Pending |
 | Package name: `dbt-s-layer` | Matches repo name | — Pending |
+| Pin only `metricflow` (0.213.0) and load manifests via its bundled `metricflow_semantic_interfaces` | 0.213.0 bundles its own semantic-interfaces fork and dropped `dbt-semantic-interfaces`; supports Python 3.11–3.14 without uv overrides | ✓ Phase 0 close-out (2026-10-19) |
 
 ## Evolution
 

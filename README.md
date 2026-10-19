@@ -16,7 +16,11 @@ Alpha. Under active development.
 ## Requirements
 
 - Python 3.11+
-- [dbt Fusion](https://docs.getdbt.com/docs/fusion/install-fusion) binary on `PATH` (for projects using the new YAML spec)
+- A dbt engine on `PATH` that writes `target/semantic_manifest.json` when you run `dbt parse`, either of:
+  - [dbt Core](https://docs.getdbt.com/docs/core/installation-overview) 1.7 or later, which parses both the legacy and the new semantic YAML spec
+  - [dbt Fusion](https://docs.getdbt.com/docs/fusion/install-fusion), which parses the new spec only
+
+Run `dbt-s-layer doctor` to check what it finds.
 
 ## License
 

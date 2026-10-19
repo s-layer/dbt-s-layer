@@ -11,19 +11,16 @@ requires-python = ">=3.11"
 dependencies = [
     "typer>=0.24.1",
     "pydantic>=2.7,<3",
-    # Pinned by spike (see spike/results-2026-04-21.txt). Bumping any of the
-    # pins below requires re-running `uv run python spike/verify_stack.py` and
-    # updating the results file.
+    # Pinned by spike (see spike/results-2026-10-19.txt). Bumping this pin
+    # requires re-running `uv run python spike/verify_stack.py`, updating the
+    # results file, and keeping tests/test_stack_surface.py green.
     #
-    # NOTE on metricflow-semantics: as of metricflow 0.209.0 it is shipped as
-    # a namespace INSIDE the `metricflow` wheel (site-packages/metricflow_semantics/)
-    # and NOT as a separate PyPI distribution. `uv add metricflow-semantics`
-    # fails with "not found in the package registry". We therefore do not pin
-    # it directly — its version tracks `metricflow` exactly. If metricflow
-    # later splits the namespace into its own dist, add: metricflow-semantics==X.Y.Z
-    "metricflow==0.209.0",
-    # metricflow-semantics==bundled-in-metricflow-0.209.0 (see NOTE above — no standalone dist)
-    "dbt-semantic-interfaces==0.9.4.dev0",
+    # As of metricflow 0.213.0 the wheel bundles both `metricflow_semantics`
+    # and `metricflow_semantic_interfaces` (its own fork of
+    # dbt-semantic-interfaces) and no longer depends on the
+    # `dbt-semantic-interfaces` distribution. Neither bundled namespace is a
+    # separate PyPI dist, so this single pin fixes all three.
+    "metricflow==0.213.0",
 ]
 
 [project.scripts]
@@ -65,16 +62,3 @@ ignore = [
 
 [tool.pytest.ini_options]
 addopts = "-v"
-
-[tool.uv]
-# metricflow 0.209.0 caps at Requires-Python <3.13. This override widens the cap
-# so our Python 3.13 and 3.14 CI legs can resolve metricflow. The upper bound is
-# <3.15 (not <3.14) because `python_version < "3.14"` evaluates False on Python
-# 3.14 itself — `<3.15` is the inclusive-of-3.14 form. Remove once metricflow
-# publishes a release that drops the <3.13 cap natively.
-override-dependencies = [
-    "metricflow; python_version >= '3.10' and python_version < '3.15'",
-]
-# Allow the dev-version transitive pin (dbt-semantic-interfaces==0.9.4.dev0).
-# metricflow 0.209.0 pins this exactly; uv refuses dev versions by default.
-prerelease = "allow"

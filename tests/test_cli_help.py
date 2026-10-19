@@ -1,9 +1,11 @@
-"""Tests for the dbt-s-layer CLI --help surface (SC-3)."""
+"""Tests for the dbt-s-layer CLI surface (SC-3, SC-4)."""
 
 from __future__ import annotations
 
+import pytest
 from typer.testing import CliRunner
 
+from dbt_s_layer import _doctor
 from dbt_s_layer.cli import app
 
 runner = CliRunner()
@@ -37,3 +39,13 @@ def test_doctor_help_shows_docstring() -> None:
     """`dbt-s-layer doctor --help` output contains the command's docstring summary."""
     result = runner.invoke(app, ["doctor", "--help"])
     assert "environment diagnostics" in result.stdout.lower()
+
+
+@pytest.mark.parametrize("code", [0, 1, 2])
+def test_doctor_command_exits_with_run_doctor_code(
+    monkeypatch: pytest.MonkeyPatch, code: int
+) -> None:
+    """`dbt-s-layer doctor` exits with whatever run_doctor() returns."""
+    monkeypatch.setattr(_doctor, "run_doctor", lambda: code)
+    result = runner.invoke(app, ["doctor"])
+    assert result.exit_code == code

@@ -14,7 +14,7 @@ dbt-s-layer is a Python codegen tool that reads dbt semantic YAML (via `semantic
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 0: Foundation & Governance** - Repo scaffold, license CI, stack verification spike, doctor stub
+- [x] **Phase 0: Foundation & Governance** - Repo scaffold, license CI, stack verification spike, doctor stub
 - [ ] **Phase 1: Parsing Pipeline** - Read `semantic_manifest.json` + `manifest.json`, build ref/source sentinel map
 - [ ] **Phase 2: Export SQL Generation** - MetricFlow engine integration + sentinel-prefix `ref()` rewriting (HIGH RISK)
 - [ ] **Phase 3: File Output + CLI** - Atomic byte-stable writer, `generate` / `check` commands, companion YAML
@@ -35,23 +35,27 @@ Decimal phases appear between their surrounding integers in numeric order.
   2. CI runs ruff, basedpyright, and pytest (NO license scan — superseded by CONTEXT.md; ELv2 risk is architectural, not a dep-tree problem)
   3. `dbt-s-layer --help` and `dbt-s-layer doctor --help` print usage from a pip-installed build
   4. `dbt-s-layer doctor` detects presence/absence of the `dbtf` binary and reports the installed metricflow version
-  5. Pinned versions for `metricflow`, `metricflow-semantics`, and `dbt-semantic-interfaces` are committed after the stack verification spike confirms Pydantic v1/v2 status
+  5. Pinned versions for `metricflow`, `metricflow-semantics`, and `dbt-semantic-interfaces` are committed after the stack verification spike confirms Pydantic v1/v2 status (as of metricflow 0.213.0 the latter two are bundled in the metricflow wheel, so one `metricflow==` pin covers all three)
 **Plans**: 4 plans
-  - [ ] 00-01-PLAN.md — Package scaffold: pyproject.toml (uv_build, dev deps, scripts entrypoint), src/dbt_s_layer/ with py.typed, tests/ smoke, LICENSE, README (Wave 1)
-  - [ ] 00-02-PLAN.md — CLI + doctor command: Typer app, _doctor.py (shutil.which + importlib.metadata), CliRunner tests [CLI-03] (Wave 2)
-  - [ ] 00-03-PLAN.md — Stack verification spike + metricflow family pinning in pyproject.toml, [tool.uv] override-dependencies (Wave 2)
-  - [ ] 00-04-PLAN.md — .pre-commit-config.yaml + 4 GitHub Actions workflows (ci/quality/release/weekly) on 3.11/3.12/3.13/3.14 matrix (Wave 3)
+  - [x] 00-01-PLAN.md — Package scaffold: pyproject.toml (uv_build, dev deps, scripts entrypoint), src/dbt_s_layer/ with py.typed, tests/ smoke, LICENSE, README (Wave 1)
+  - [x] 00-02-PLAN.md — CLI + doctor command: Typer app, _doctor.py (shutil.which + importlib.metadata), CliRunner tests [CLI-03] (Wave 2)
+  - [x] 00-03-PLAN.md — Stack verification spike + metricflow family pinning in pyproject.toml, [tool.uv] override-dependencies (Wave 2)
+  - [x] 00-04-PLAN.md — .pre-commit-config.yaml + 4 GitHub Actions workflows (ci/quality/release/weekly) on 3.11/3.12/3.13/3.14 matrix (Wave 3)
 
 ### Phase 1: Parsing Pipeline
 **Goal**: A Python pipeline that loads `semantic_manifest.json` + `manifest.json` from any dbt project and produces typed internal models plus a fully-resolved ref/source sentinel map
 **Depends on**: Phase 0
 **Requirements**: PARSE-01, PARSE-02, PARSE-03, CLI-05
 **Success Criteria** (what must be TRUE):
-  1. Given a legacy-spec fixture project, the pipeline produces an internal `SemanticProject` object with all semantic models, metrics, and saved queries loaded
-  2. Given a new-spec (dbt 2.x / Fusion) fixture project, the same pipeline produces the equivalent internal object with no code path differences
+  1. Given a legacy-spec fixture project (parsed by dbt Core; Fusion 2.x ignores the legacy spec), the pipeline produces an internal `SemanticProject` object with all semantic models, metrics, and saved queries loaded
+  2. Given a new-spec fixture project parsed by Fusion or by dbt Core 1.12+, the same pipeline produces the equivalent internal object with no code path differences
   3. Every `semantic_model.node_relation.relation_name` is mapped to a `ref()` / `source()` sentinel via `manifest.json` `depends_on.nodes` lookup
   4. Running any CLI command with a stale or missing `semantic_manifest.json` exits with a clear error telling the user to run `dbt parse` / `dbtf parse`
-**Plans**: TBD
+**Plans**: 4 plans
+  - [ ] 01-01-PLAN.md — Fixture corpus: real artifacts from Fusion 2.0.8 (new spec) and dbt Core 1.12.6 (new + legacy spec), regen script, corpus guard tests (Wave 1)
+  - [ ] 01-02-PLAN.md — Artifact readers + `SemanticProject` loader via metricflow's dbt manifest parser [PARSE-01, PARSE-02] (Wave 2)
+  - [ ] 01-03-PLAN.md — Ref map: semantic model -> dbt node, verbatim `ref()` expression, relation parts [PARSE-03] (Wave 3)
+  - [ ] 01-04-PLAN.md — Missing/stale artifact errors, dropped-semantic-model warning, `doctor --project-dir` [CLI-05, CLI-03] (Wave 3)
 
 ### Phase 2: Export SQL Generation
 **Goal**: Given a parsed `SemanticProject`, emit MetricFlow-rendered SQL for every `saved_query` export, with all physical table references rewritten to dbt `{{ ref() }}` / `{{ source() }}` / versioned / cross-project Jinja calls
@@ -141,7 +145,7 @@ Phases execute in numeric order: 0 → 1 → 2 → 3 → 4 → 5 → 6 → 7 →
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 0. Foundation & Governance | 0/4 | Not started | - |
+| 0. Foundation & Governance | 4/4 | Complete | 2026-10-19 |
 | 1. Parsing Pipeline | 0/TBD | Not started | - |
 | 2. Export SQL Generation | 0/TBD | Not started | - |
 | 3. File Output + CLI | 0/TBD | Not started | - |
