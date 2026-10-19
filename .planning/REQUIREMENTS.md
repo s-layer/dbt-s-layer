@@ -13,11 +13,11 @@
 
 ### Export Codegen
 
-- [ ] **EXPRT-01**: Tool generates one `exp__<saved_query>__<export>.sql` dbt model for each `export` block within a `saved_query`, using MetricFlow's SQL rendering engine
-- [ ] **EXPRT-02**: Generated export SQL contains `{{ ref('...') }}`, `{{ source('...', '...') }}`, `{{ ref('project', 'model') }}` (cross-project), and `{{ ref('model', v=N) }}` (versioned) Jinja calls in place of physical table references (sentinel-prefix rewrite approach)
-- [ ] **EXPRT-03**: Generated export model file contains a `{{ config() }}` block honouring the `export.config` materialisation strategy (`table`, `view`) from the YAML
-- [ ] **EXPRT-04**: Tool runs a pre-flight check that no dbt model or source name collides with the reserved sentinel prefixes (`__REF__`, `__SOURCE__`, `__XREF__`, `__REFV__`) and errors with a clear message if a collision is found
-- [ ] **EXPRT-05**: Tool runs a post-flight check that no generated file contains an unresolved sentinel token, and refuses to write any such file
+- [x] **EXPRT-01**: Tool generates one `exp__<saved_query>__<export>.sql` dbt model for each `export` block within a `saved_query`, using MetricFlow's SQL rendering engine
+- [x] **EXPRT-02**: Generated export SQL contains `{{ ref('...') }}`, `{{ source('...', '...') }}`, `{{ ref('project', 'model') }}` (cross-project), and `{{ ref('model', v=N) }}` (versioned) Jinja calls in place of physical table references (sentinel-prefix rewrite approach). `source()` is never needed: dbt does not let a semantic model read a source
+- [x] **EXPRT-03**: Generated export model file contains a `{{ config() }}` block honouring the `export.config` materialisation strategy (`table`, `view`) from the YAML
+- [x] **EXPRT-04**: Tool runs a pre-flight check that no dbt model or source name collides with the reserved sentinel prefixes (`__REF__`, `__SOURCE__`, `__XREF__`, `__REFV__`) and errors with a clear message if a collision is found. Implemented over what can reach generated SQL: every semantic manifest string and the name/alias of each model a semantic model reads. Source names cannot reach it (semantic models cannot read sources)
+- [x] **EXPRT-05**: Tool runs a post-flight check that no generated file contains an unresolved sentinel token, and refuses to write any such file
 
 ### Semantic View Codegen
 
@@ -85,11 +85,11 @@
 | PARSE-01 | Phase 1 | Complete |
 | PARSE-02 | Phase 1 | Complete |
 | PARSE-03 | Phase 1 | Complete |
-| EXPRT-01 | Phase 2 | Pending |
-| EXPRT-02 | Phase 2 | Pending |
-| EXPRT-03 | Phase 2 | Pending |
-| EXPRT-04 | Phase 2 | Pending |
-| EXPRT-05 | Phase 2 | Pending |
+| EXPRT-01 | Phase 2 | Complete |
+| EXPRT-02 | Phase 2 | Complete |
+| EXPRT-03 | Phase 2 | Complete |
+| EXPRT-04 | Phase 2 | Complete |
+| EXPRT-05 | Phase 2 | Complete |
 | SEMVW-01 | Phase 4 | Pending |
 | SEMVW-02 | Phase 4 | Pending |
 | SEMVW-03 | Phase 6 | Pending |

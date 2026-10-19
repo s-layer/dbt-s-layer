@@ -198,6 +198,9 @@ class ModelNode(_ManifestModel):
     database: str | None = None
     schema_name: str = Field(alias="schema")
     alias: str
+    # The engine's own rendering of the relation, quoted by dbt Core but not by
+    # Fusion. Only compared with strings from the same engine (time spines).
+    relation_name: str | None = None
 
 
 class DbtSemanticModel(_ManifestModel):
@@ -211,12 +214,30 @@ class DbtSemanticModel(_ManifestModel):
     depends_on: DependsOn = DependsOn()
 
 
+class SavedQueryConfig(_ManifestModel):
+    """A saved query's own `config`: defaults its exports inherit."""
+
+    export_as: str | None = None
+    schema_name: str | None = Field(default=None, alias="schema")
+
+
+class SavedQueryExport(_ManifestModel):
+    """A saved query `exports[*]` entry."""
+
+    name: str
+    # Only what the user wrote on the export. The rendered `config` cannot tell
+    # an explicit schema from the target's default.
+    unrendered_config: dict[str, object] = {}
+
+
 class DbtSavedQuery(_ManifestModel):
     """A `saved_queries[*]` entry."""
 
     unique_id: str
     name: str
     package_name: str
+    config: SavedQueryConfig = SavedQueryConfig()
+    exports: tuple[SavedQueryExport, ...] = ()
 
 
 class DbtManifest(_ManifestModel):

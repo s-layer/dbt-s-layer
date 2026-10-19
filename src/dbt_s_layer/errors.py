@@ -30,3 +30,11 @@ class StaleArtifactError(DbtSLayerError):
 
 class RefResolutionError(DbtSLayerError):
     """A semantic model cannot be mapped to exactly one dbt model node."""
+
+
+class SentinelCollisionError(DbtSLayerError):
+    """Project input already contains a reserved sentinel prefix (`__REF__` and friends)."""
+
+
+class ExportRenderError(DbtSLayerError):
+    """An export's SQL could not be rendered into a dbt model."""

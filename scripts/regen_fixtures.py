@@ -6,6 +6,10 @@ Each artifact set is produced by a real `dbt parse` of a fixture project:
     fusion_new   tests/fixtures/projects/new_spec     dbt Fusion, snowflake target
     core_new     tests/fixtures/projects/new_spec     dbt Core,   duckdb target
     core_legacy  tests/fixtures/projects/legacy_spec  dbt Core,   duckdb target
+    fusion_export tests/fixtures/projects/export_spec   dbt Fusion, snowflake target
+    core_export  tests/fixtures/projects/export_legacy dbt Core,   duckdb target
+
+Projects with a `packages.yml` get `dbt deps` first.
 
 `manifest.json` is trimmed to what dbt-s-layer reads (metadata, model, seed and
 snapshot nodes, semantic models and saved queries), and every machine- or
@@ -44,6 +48,8 @@ SETS: list[tuple[str, str, EngineKind, str]] = [
     ("fusion_new", "new_spec", "Fusion", "snowflake"),
     ("core_new", "new_spec", "dbt Core", "duckdb"),
     ("core_legacy", "legacy_spec", "dbt Core", "duckdb"),
+    ("fusion_export", "export_spec", "Fusion", "snowflake"),
+    ("core_export", "export_legacy", "dbt Core", "duckdb"),
 ]
 
 # Only these metadata keys are stable across machines and runs.
@@ -115,12 +121,34 @@ def _check_no_paths(text: str, scratch: Path, name: str) -> None:
             raise RegenError(f"{name} still contains a machine path ({needle})")
 
 
+def _run(set_name: str, cmd: list[str], env: dict[str, str]) -> None:
+    result = subprocess.run(cmd, capture_output=True, text=True, env=env, check=False)
+    if result.returncode != 0:
+        raise RegenError(
+            f"{set_name}: `{' '.join(cmd)}` exited {result.returncode}\n"
+            f"{result.stdout}\n{result.stderr}"
+        )
+
+
 def regen_set(set_name: str, project: str, engine: Engine, target: str) -> None:
     """Run `dbt parse` for one artifact set and write its trimmed artifacts."""
     project_dir = PROJECTS / project
     env = {**os.environ, "DO_NOT_TRACK": "1", "DBT_SEND_ANONYMOUS_USAGE_STATS": "false"}
     with tempfile.TemporaryDirectory(prefix=f"regen-{set_name}-") as tmp:
         scratch = Path(tmp)
+        if (project_dir / "packages.yml").exists():
+            _run(
+                set_name,
+                [
+                    engine.path,
+                    "deps",
+                    "--project-dir",
+                    str(project_dir),
+                    "--profiles-dir",
+                    str(project_dir / "profiles"),
+                ],
+                env,
+            )
         cmd = [
             engine.path,
             "parse",
@@ -135,12 +163,7 @@ def regen_set(set_name: str, project: str, engine: Engine, target: str) -> None:
             "--log-path",
             str(scratch / "logs"),
         ]
-        result = subprocess.run(cmd, capture_output=True, text=True, env=env, check=False)
-        if result.returncode != 0:
-            raise RegenError(
-                f"{set_name}: `{' '.join(cmd)}` exited {result.returncode}\n"
-                f"{result.stdout}\n{result.stderr}"
-            )
+        _run(set_name, cmd, env)
         target_dir = scratch / "target"
         semantic = json.loads((target_dir / "semantic_manifest.json").read_text())
         manifest = trim_manifest(json.loads((target_dir / "manifest.json").read_text()))
