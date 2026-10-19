@@ -115,7 +115,7 @@ def _by_file(models: tuple[ExportModel, ...]) -> dict[str, ExportModel]:
 
 
 def _physical_sql(project: SemanticProject, saved_query: str, adapter: str) -> str:
-    """metricflow's own SQL for the saved query, against the physical tables."""
+    """Metricflow's own SQL for the saved query, against the physical tables."""
     engine = MetricFlowEngine(
         SemanticManifestLookup(project.semantic_manifest), sql_client_for(adapter)
     )
@@ -229,25 +229,52 @@ def test_models_use_every_ref_form(set_name: str, make_project: MakeProject) -> 
 
 
 @pytest.mark.parametrize("set_name", EXPORT_SETS)
+@pytest.mark.parametrize("saved_query", sorted({sq for sq, *_ in EXPECTED.values()}))
 def test_a_model_does_not_depend_on_other_saved_queries(
-    set_name: str, make_project: MakeProject
+    set_name: str, saved_query: str, make_project: MakeProject
 ) -> None:
-    # One metricflow engine renders saved queries differently depending on what
-    # it rendered before, so each saved query needs its own engine.
-    def only_items(raw: dict[str, Any]) -> None:
-        raw["saved_queries"] = [q for q in raw["saved_queries"] if q["name"] == "items_by_country"]
-
-    def only_items_dbt(raw: dict[str, Any]) -> None:
-        raw["saved_queries"] = {
-            k: v for k, v in raw["saved_queries"].items() if k.endswith(".items_by_country")
-        }
-
+    # One metricflow engine renders a saved query differently depending on
+    # what it rendered before, so each saved query needs its own engine.
     project_dir = make_project(set_name)
     full = _by_file(render_exports(load_project(project_dir)))
-    _rewrite(project_dir, only_items, only_items_dbt)
+
+    def only_one(raw: dict[str, Any]) -> None:
+        raw["saved_queries"] = [q for q in raw["saved_queries"] if q["name"] == saved_query]
+
+    def only_one_dbt(raw: dict[str, Any]) -> None:
+        raw["saved_queries"] = {
+            k: v for k, v in raw["saved_queries"].items() if k.endswith(f".{saved_query}")
+        }
+
+    _rewrite(project_dir, only_one, only_one_dbt)
     alone = render_exports(load_project(project_dir))
-    assert len(alone) == 1
-    assert alone[0].body == full[alone[0].file_name].body
+    assert alone
+    for model in alone:
+        assert model.saved_query == saved_query
+        assert model.body == full[model.file_name].body
+
+
+@pytest.mark.parametrize("set_name", EXPORT_SETS)
+def test_identical_saved_queries_render_identical_sql(
+    set_name: str, make_project: MakeProject
+) -> None:
+    # A metricflow engine caches plans: asked for the same query a second time,
+    # it renders different subquery aliases. Each saved query needs its own engine.
+    def copy(raw: dict[str, Any]) -> None:
+        original = next(q for q in raw["saved_queries"] if q["name"] == "items_by_country")
+        clone = json.loads(json.dumps(original))
+        clone["name"] = "items_copy"
+        raw["saved_queries"].append(clone)
+
+    def copy_dbt(raw: dict[str, Any]) -> None:
+        clone = json.loads(json.dumps(raw["saved_queries"]["saved_query.fx.items_by_country"]))
+        clone.update(name="items_copy", unique_id="saved_query.fx.items_copy")
+        raw["saved_queries"]["saved_query.fx.items_copy"] = clone
+
+    models = _by_file(render_exports(load_project(_mutate(make_project, set_name, copy, copy_dbt))))
+    original = models["exp__items_by_country__exp_items_by_country.sql"].body
+    assert "subq_" in original
+    assert models["exp__items_copy__exp_items_by_country.sql"].body == original
 
 
 @pytest.mark.parametrize("set_name", EXPORT_SETS)
@@ -306,6 +333,33 @@ def test_invalid_saved_query_is_named(make_project: MakeProject) -> None:
         render_exports(project)
 
 
+def test_bind_parameters_are_refused(
+    make_project: MakeProject, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from metricflow.engine import metricflow_engine
+    from metricflow_semantics.sql.sql_bind_parameters import SqlBindParameterSet
+
+    explain = metricflow_engine.MetricFlowEngine.explain
+
+    def with_params(self: Any, request: Any) -> Any:
+        result = explain(self, request)
+        statement = result.sql_statement
+        params = SqlBindParameterSet.create_from_dict({"p": 1})
+        fake_statement = type(statement)(sql=statement.sql, bind_parameter_set=params)
+
+        class _Result:
+            sql_statement = fake_statement
+
+        return _Result()
+
+    monkeypatch.setattr(metricflow_engine.MetricFlowEngine, "explain", with_params)
+    project = load_project(make_project("core_export"))
+    with pytest.raises(
+        ExportRenderError, match=r"saved query 'cumulative_revenue'.*bind parameters"
+    ):
+        render_exports(project)
+
+
 def test_saved_query_missing_from_manifest_json(make_project: MakeProject) -> None:
     def drop(raw: dict[str, Any]) -> None:
         del raw["saved_queries"]["saved_query.fx.cumulative_revenue"]
@@ -336,7 +390,9 @@ def test_duplicate_export_names(make_project: MakeProject) -> None:
         )
 
     project = load_project(_mutate(make_project, "core_export", rename, rename_dbt))
-    with pytest.raises(ExportRenderError, match=r"exp__revenue_by_day__exp_revenue_by_day\.sql.*both"):
+    with pytest.raises(
+        ExportRenderError, match=r"exp__revenue_by_day__exp_revenue_by_day\.sql.*both"
+    ):
         render_exports(project)
 
 

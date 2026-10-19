@@ -22,6 +22,17 @@ Alpha. Under active development.
 
 Run `dbt-s-layer doctor` to check what it finds. Add `--project-dir path/to/project` to also check that project's parse artifacts exist and are newer than its semantic YAML.
 
+## Exports
+
+Each `export` of a `saved_query` becomes one model, `exp__<saved_query>__<export>.sql`: MetricFlow's SQL for the saved query, with every table it reads written as a `{{ ref() }}`, so the export sits in your DAG like any other model.
+
+- `export_as: table` or `view` sets `materialized` (default `table`). An export without its own `export_as` uses the saved query's `config.export_as`.
+- `alias` defaults to the export name.
+- `schema`, if you set one on the export or the saved query, goes through your project's `generate_schema_name` like any dbt model schema. With dbt's default macro that means `<target schema>_<schema>`, where dbt Cloud would write to the schema exactly as named.
+- The SQL dialect follows the adapter of the target you parsed with.
+
+The command that writes these files is not released yet.
+
 ## License
 
 Apache-2.0. See [LICENSE](./LICENSE).

@@ -15,10 +15,11 @@ versioned semantic models. The SQL needs no warehouse: a stub `SqlClient` that e
 
 Five findings change the original design:
 
-1. **SQL depends on query order inside one engine** (verified). Rendering saved query B after
-   A on the same `MetricFlowEngine` gives different subquery aliases (`subq_11` vs `subq_8`)
-   than rendering B first. A fresh engine per saved query (sharing one
-   `SemanticManifestLookup`) is order-independent and byte-stable across processes. Engine
+1. **An engine renders a repeated query differently** (verified). `MetricFlowEngine` caches
+   plans: asked for the same query a second time it renders different subquery aliases
+   (`subq_8` instead of `subq_11`). Two saved queries with the same query params would then get
+   different SQL depending on which was rendered first. A fresh engine per saved query (sharing
+   one `SemanticManifestLookup`) is byte-stable across runs, orders and processes. Engine
    construction costs ~30 ms. **Use one engine per saved query.**
 2. **Semantic models cannot read sources** (verified). dbt Core rejects
    `model: source('raw', 'events')` with "'source' is undefined", so `__SOURCE__` is never

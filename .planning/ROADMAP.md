@@ -16,7 +16,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 0: Foundation & Governance** - Repo scaffold, license CI, stack verification spike, doctor stub
 - [x] **Phase 1: Parsing Pipeline** - Read `semantic_manifest.json` + `manifest.json`, build ref/source sentinel map
-- [ ] **Phase 2: Export SQL Generation** - MetricFlow engine integration + sentinel-prefix `ref()` rewriting (HIGH RISK)
+- [x] **Phase 2: Export SQL Generation** - MetricFlow engine integration + sentinel-prefix `ref()` rewriting (HIGH RISK)
 - [ ] **Phase 3: File Output + CLI** - Atomic byte-stable writer, `generate` / `check` commands, companion YAML
 - [ ] **Phase 4: Snowflake Adapter** - `sem__*.sql` via `dbt_semantic_view` package (HIGH RISK)
 - [ ] **Phase 5: Pre-Commit Hook** - `.pre-commit-hooks.yaml` triggering regeneration on YAML changes
@@ -63,11 +63,14 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Requirements**: EXPRT-01, EXPRT-02, EXPRT-03, EXPRT-04, EXPRT-05
 **Success Criteria** (what must be TRUE):
   1. For each `export` in a `saved_query`, the pipeline produces a rendered SQL string containing the expected aggregations and group-bys
-  2. All four sentinel forms (`__REF__`, `__SOURCE__`, `__XREF__`, `__REFV__`) round-trip correctly from sentinel-prefixed SQL to final Jinja calls across a hostile test fixture (3-part Snowflake identifiers, versioned refs, cross-project refs)
+  2. All four sentinel forms (`__REF__`, `__SOURCE__`, `__XREF__`, `__REFV__`) round-trip correctly from sentinel-prefixed SQL to final Jinja calls across a hostile test fixture (3-part Snowflake identifiers, versioned refs, cross-project refs). `__SOURCE__` is reserved only: dbt does not let a semantic model read a source (02-RESEARCH.md)
   3. Pre-flight aborts with a clear error if a user-defined dbt model or source name collides with any reserved sentinel prefix
   4. Post-flight refuses to emit any generated file containing an unresolved sentinel token
   5. The generated `{{ config(materialized=...) }}` block reflects each export's YAML materialisation strategy (`table`, `view`)
-**Plans**: TBD
+**Plans**: 3 plans
+- [x] 02-01-PLAN.md — Export fixtures from dbt Core and Fusion (package, versioned models, time spine)
+- [x] 02-02-PLAN.md — Sentinel table, pre-flight, ref rewrite, post-flight, Jinja escaping
+- [x] 02-03-PLAN.md — Export renderer: dialects, one engine per saved query, config block
 **Research flag**: HIGH RISK — `/gsd-research-phase` required before planning. Must verify `MetricFlowEngine.explain()`, `SqlTable.from_string`, and `visit_table_node` API shapes against the pinned metricflow versions.
 
 ### Phase 3: File Output + CLI
@@ -147,7 +150,7 @@ Phases execute in numeric order: 0 → 1 → 2 → 3 → 4 → 5 → 6 → 7 →
 |-------|----------------|--------|-----------|
 | 0. Foundation & Governance | 4/4 | Complete | 2026-10-19 |
 | 1. Parsing Pipeline | 4/4 | Complete | 2026-10-19 |
-| 2. Export SQL Generation | 0/TBD | Not started | - |
+| 2. Export SQL Generation | 3/3 | Complete | 2026-10-19 |
 | 3. File Output + CLI | 0/TBD | Not started | - |
 | 4. Snowflake Adapter | 0/TBD | Not started | - |
 | 5. Pre-Commit Hook | 0/TBD | Not started | - |
