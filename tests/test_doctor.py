@@ -9,7 +9,7 @@ import subprocess
 from collections.abc import Callable
 from importlib.metadata import PackageNotFoundError
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pytest
 from typer.testing import CliRunner
@@ -632,3 +632,42 @@ def test_doctor_says_nothing_about_the_package_off_snowflake(
     _engines_ok(monkeypatch)
     assert run_doctor(make_project("core_export")) == 0
     assert "dbt_semantic_view" not in capsys.readouterr().out
+
+
+# --- dbt-databricks metric views (Phase 6) ----------------------------------------------
+
+
+def _on_databricks(project_dir: Path, macros: dict[str, Any]) -> None:
+    path = project_dir / "target" / "manifest.json"
+    raw = json.loads(path.read_text())
+    raw["metadata"]["adapter_type"] = "databricks"
+    raw["macros"] = macros
+    path.write_text(json.dumps(raw))
+
+
+def test_doctor_reports_a_missing_metric_view_materialization(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    make_project: MakeProject,
+) -> None:
+    _engines_ok(monkeypatch)
+    project_dir = make_project("fusion_export")
+    _on_databricks(project_dir, {})
+    assert run_doctor(project_dir) == 0
+    out = capsys.readouterr().out
+    assert "WARN dbt-databricks metric views: no metric_view materialization" in out
+    assert ">= 1.12.0" in out
+
+
+def test_doctor_reports_the_metric_view_materialization(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    make_project: MakeProject,
+) -> None:
+    _engines_ok(monkeypatch)
+    project_dir = make_project("fusion_export")
+    _on_databricks(
+        project_dir, {"macro.dbt_databricks.materialization_metric_view_databricks": {"name": "m"}}
+    )
+    assert run_doctor(project_dir) == 0
+    assert "OK  dbt-databricks metric views: installed" in capsys.readouterr().out

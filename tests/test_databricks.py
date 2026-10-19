@@ -193,7 +193,7 @@ def test_root_exprs() -> None:
         "source.ordered_at",
         "date_trunc('month', ordered_at)",
     ]
-    assert [m["expr"] for m in loaded["measures"]] == ["SUM(source.amount)", "SUM(amount - tax)"]
+    assert [m["expr"] for m in loaded["measures"]] == ["SUM(amount - tax)", "SUM(source.amount)"]
 
 
 # --- joins ---------------------------------------------------------------------
