@@ -515,6 +515,72 @@
       "version": null
     }
   },
+  "saved_queries": {
+    "saved_query.fx.revenue_by_day": {
+      "classifiers": [],
+      "config": {
+        "cache": {
+          "enabled": false
+        },
+        "enabled": true,
+        "export_as": null,
+        "group": null,
+        "meta": {},
+        "schema": null,
+        "tags": []
+      },
+      "depends_on": {
+        "macros": [],
+        "nodes": [
+          "metric.fx.revenue"
+        ],
+        "nodes_with_ref_location": []
+      },
+      "exports": [
+        {
+          "config": {
+            "alias": "exp_revenue_by_day",
+            "database": "ANALYTICS",
+            "export_as": "table",
+            "schema_name": "MARTS"
+          },
+          "name": "exp_revenue_by_day",
+          "unrendered_config": {
+            "export_as": "table"
+          }
+        }
+      ],
+      "fqn": [
+        "fx",
+        "marts",
+        "revenue_by_day"
+      ],
+      "group": null,
+      "label": null,
+      "meta": {},
+      "metadata": null,
+      "name": "revenue_by_day",
+      "original_file_path": "models/marts/orders.yml",
+      "package_name": "fx",
+      "path": "marts/orders.yml",
+      "query_params": {
+        "group_by": [
+          "TimeDimension('order__ordered_at', 'day')"
+        ],
+        "limit": null,
+        "metrics": [
+          "revenue"
+        ],
+        "order_by": [],
+        "where": null
+      },
+      "refs": [],
+      "resource_type": "saved_query",
+      "tags": [],
+      "unique_id": "saved_query.fx.revenue_by_day",
+      "unrendered_config": {}
+    }
+  },
   "semantic_models": {
     "semantic_model.fx.customers": {
       "classifiers": [],

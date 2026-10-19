@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, ConfigDict
 
+from dbt_s_layer.artifacts import RELATION_NODE_TYPES
 from dbt_s_layer.errors import RefResolutionError
 
 if TYPE_CHECKING:
@@ -22,8 +23,11 @@ if TYPE_CHECKING:
     from dbt_s_layer.project import SemanticProject
 
 
+_NODE_PREFIXES = frozenset(RELATION_NODE_TYPES)
+
+
 class RefTarget(BaseModel):
-    """The dbt node a semantic model reads, and how the user referenced it."""
+    """The dbt node (model, seed or snapshot) a semantic model reads, and how it was referenced."""
 
     model_config = ConfigDict(frozen=True)
 
@@ -67,17 +71,17 @@ def build_ref_map(project: SemanticProject) -> Mapping[str, RefTarget]:
     for semantic_model in project.semantic_manifest.semantic_models:
         name = semantic_model.name.lower()
         dbt_sm = _find_dbt_semantic_model(project, name)
-        model_ids = [n for n in dbt_sm.depends_on.nodes if n.startswith("model.")]
+        model_ids = [n for n in dbt_sm.depends_on.nodes if n.split(".", 1)[0] in _NODE_PREFIXES]
         if len(model_ids) != 1:
-            found = ", ".join(model_ids) if model_ids else "no model"
+            found = ", ".join(model_ids) if model_ids else "none"
             raise RefResolutionError(
-                f"semantic model {name!r} must read exactly one dbt model, but manifest.json "
-                f"lists {found} (artifacts produced by {project.producer})."
+                f"semantic model {name!r} must read exactly one dbt model, seed or snapshot, "
+                f"but manifest.json lists {found} (artifacts produced by {project.producer})."
             )
         node = project.dbt_manifest.nodes.get(model_ids[0])
         if node is None:
             raise RefResolutionError(
-                f"semantic model {name!r} reads {model_ids[0]}, which is not a model node in "
+                f"semantic model {name!r} reads {model_ids[0]}, which is not a node in "
                 f"manifest.json (artifacts produced by {project.producer}). Re-run `dbt parse`."
             )
         if not dbt_sm.model:

@@ -214,16 +214,19 @@ def test_fresh_artifacts_without_warnings(set_name: str, make_project: MakeProje
 
 def test_fusion_on_legacy_spec_warns(make_project: MakeProject) -> None:
     # Fusion ignores legacy-spec semantic models. Simulate its artifacts for the
-    # legacy project: Fusion's set without `order_items` (and its metric).
+    # legacy project: Fusion's set without `order_items` (and its metric), and
+    # without `customers`, which the legacy project does not declare.
     project_dir = make_project("core_legacy")
     target = project_dir / "target"
     semantic: dict[str, Any] = json.loads(
         (ARTIFACTS / "fusion_new" / "semantic_manifest.json").read_text()
     )
     semantic["semantic_models"] = [
-        sm for sm in semantic["semantic_models"] if sm["name"] != "order_items"
+        sm for sm in semantic["semantic_models"] if sm["name"] not in {"order_items", "customers"}
     ]
-    semantic["metrics"] = [m for m in semantic["metrics"] if m["name"] != "items_sold"]
+    semantic["metrics"] = [
+        m for m in semantic["metrics"] if m["name"] not in {"items_sold", "cust_total"}
+    ]
     (target / "semantic_manifest.json").write_text(json.dumps(semantic))
     shutil.copyfile(ARTIFACTS / "fusion_new" / "manifest.json", target / "manifest.json")
 

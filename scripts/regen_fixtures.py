@@ -7,9 +7,10 @@ Each artifact set is produced by a real `dbt parse` of a fixture project:
     core_new     tests/fixtures/projects/new_spec     dbt Core,   duckdb target
     core_legacy  tests/fixtures/projects/legacy_spec  dbt Core,   duckdb target
 
-`manifest.json` is trimmed to what dbt-s-layer reads (metadata, model nodes and
-semantic models), and every machine- or run-specific value is dropped, so that
-regenerating with the same engine versions produces no diff.
+`manifest.json` is trimmed to what dbt-s-layer reads (metadata, model, seed and
+snapshot nodes, semantic models and saved queries), and every machine- or
+run-specific value is dropped, so that regenerating with the same engine
+versions produces no diff.
 
 Usage:
     uv run python scripts/regen_fixtures.py --fusion PATH --core PATH
@@ -47,6 +48,8 @@ SETS: list[tuple[str, str, EngineKind, str]] = [
 
 # Only these metadata keys are stable across machines and runs.
 _METADATA_KEYS = ("adapter_type", "dbt_schema_version", "dbt_version", "project_name", "quoting")
+# Node types a semantic model can read from.
+_RELATION_NODE_TYPES = ("model", "seed", "snapshot")
 # Node keys that vary per run or per machine.
 _VOLATILE_NODE_KEYS = ("created_at", "root_path", "build_path", "compiled_path", "deferred")
 
@@ -91,10 +94,13 @@ def trim_manifest(manifest: dict[str, Any]) -> dict[str, Any]:
         "nodes": {
             node_id: _strip_volatile(node)
             for node_id, node in manifest["nodes"].items()
-            if node.get("resource_type") == "model"
+            if node.get("resource_type") in _RELATION_NODE_TYPES
         },
         "semantic_models": {
             sm_id: _strip_volatile(sm) for sm_id, sm in manifest["semantic_models"].items()
+        },
+        "saved_queries": {
+            sq_id: _strip_volatile(sq) for sq_id, sq in manifest["saved_queries"].items()
         },
     }
 

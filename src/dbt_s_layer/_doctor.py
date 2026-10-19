@@ -212,10 +212,12 @@ def run_doctor(project_dir: Path | None = None) -> int:
             file=sys.stdout,
         )
 
+    metricflow_ok = True
     try:
         mf_version = version("metricflow")
         print(f"OK  metricflow version: {mf_version}", file=sys.stdout)
     except PackageNotFoundError:
+        metricflow_ok = False
         print(
             "ERROR: metricflow is not installed (dbt-s-layer install is broken).",
             file=sys.stdout,
@@ -223,6 +225,12 @@ def run_doctor(project_dir: Path | None = None) -> int:
         exit_code = max(exit_code, 2)
 
     if project_dir is not None:
-        exit_code = max(exit_code, _check_project(project_dir))
+        if metricflow_ok:
+            exit_code = max(exit_code, _check_project(project_dir))
+        else:
+            # Loading the artifacts needs metricflow.
+            print(
+                "SKIP artifacts: not checked because metricflow is not installed", file=sys.stdout
+            )
 
     return exit_code

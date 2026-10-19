@@ -46,3 +46,10 @@ completed: 2026-10-19
 - `check_artifacts` returns `ArtifactCheck(project, warnings)` rather than a bare list, so callers get the loaded project without loading twice.
 - The Fusion-on-legacy-spec warning goes beyond the plan, which only named the dbt Core drop.
 - CLI-03's output-directory check remains for Phase 3, as planned.
+
+## Review round 1 (PR #3)
+
+- Stale now also covers removals: the artifact still holding a root-project semantic model or saved query that no scanned YAML declares (deleted, removed or disabled). Semantic models and saved queries from installed packages are exempt, and the check is skipped when some YAML could not be read. `manifest.json` fixtures now keep `saved_queries` for the package lookup.
+- A newer `dbt_project.yml` counts as stale, and the scan covers `seed-paths`, `snapshot-paths`, `analysis-paths` and `macro-paths` as well as `model-paths`.
+- Semantic models on seeds and snapshots resolve in the ref map (`DbtManifest.nodes` keeps those node types).
+- Scan `OSError`s, metricflow transform errors and empty metricflow messages become named errors; `doctor` skips the project check when metricflow is missing.

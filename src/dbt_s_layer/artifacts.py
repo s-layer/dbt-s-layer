@@ -37,6 +37,8 @@ if TYPE_CHECKING:
 SEMANTIC_MANIFEST = "semantic_manifest.json"
 DBT_MANIFEST = "manifest.json"
 DEFAULT_TARGET_PATH = "target"
+# Node types a semantic model can read from with `ref()`.
+RELATION_NODE_TYPES = ("model", "seed", "snapshot")
 _MAX_REPORTED_ISSUES = 5
 
 
@@ -121,6 +123,12 @@ def _loc(loc: tuple[int | str, ...]) -> str:
 # --- semantic_manifest.json -------------------------------------------------
 
 
+def _rejected(path: Path, exc: MetricFlowException) -> ArtifactInvalidError:
+    lines = str(exc).strip().splitlines()
+    detail = lines[0] if lines else type(exc).__name__
+    return ArtifactInvalidError(f"{path} was rejected by metricflow: {detail}")
+
+
 def read_semantic_manifest(path: Path, *, project_dir: Path) -> PydanticSemanticManifest:
     """
     Load semantic_manifest.json the way metricflow does for dbt-generated manifests.
@@ -137,7 +145,10 @@ def read_semantic_manifest(path: Path, *, project_dir: Path) -> PydanticSemantic
         raise ArtifactInvalidError(
             f"{path} is not a semantic manifest metricflow can read: {_join_issues(issues)}"
         ) from exc
-    manifest = transform_dbt_generated_manifest(raw)
+    try:
+        manifest = transform_dbt_generated_manifest(raw)
+    except MetricFlowException as exc:
+        raise _rejected(path, exc) from exc
 
     # metricflow's default-rules argument is typed against an unsolved TypeVar.
     validator = cast(
@@ -150,8 +161,7 @@ def read_semantic_manifest(path: Path, *, project_dir: Path) -> PydanticSemantic
     try:
         SemanticManifestLookup(manifest)
     except MetricFlowException as exc:
-        first_line = str(exc).strip().splitlines()[0]
-        raise ArtifactInvalidError(f"{path} was rejected by metricflow: {first_line}") from exc
+        raise _rejected(path, exc) from exc
     return manifest
 
 
@@ -177,8 +187,9 @@ class DependsOn(_ManifestModel):
 
 
 class ModelNode(_ManifestModel):
-    """A `nodes[*]` entry whose `resource_type` is `model`."""
+    """A `nodes[*]` entry a semantic model can read: a model, seed or snapshot."""
 
+    resource_type: str = "model"
     unique_id: str
     name: str
     package_name: str
@@ -200,12 +211,21 @@ class DbtSemanticModel(_ManifestModel):
     depends_on: DependsOn = DependsOn()
 
 
+class DbtSavedQuery(_ManifestModel):
+    """A `saved_queries[*]` entry."""
+
+    unique_id: str
+    name: str
+    package_name: str
+
+
 class DbtManifest(_ManifestModel):
-    """The slice of manifest.json dbt-s-layer reads."""
+    """The slice of manifest.json dbt-s-layer reads (other node types are dropped)."""
 
     metadata: ManifestMetadata
     nodes: dict[str, ModelNode]
     semantic_models: dict[str, DbtSemanticModel] = {}
+    saved_queries: dict[str, DbtSavedQuery] = {}
 
     @field_validator("nodes", mode="before")
     @classmethod
@@ -217,7 +237,7 @@ class DbtManifest(_ManifestModel):
         for node_id, node in nodes.items():
             if (
                 isinstance(node, dict)
-                and cast("dict[object, object]", node).get("resource_type") == "model"
+                and cast("dict[object, object]", node).get("resource_type") in RELATION_NODE_TYPES
             ):
                 models[node_id] = node
         return models
