@@ -276,7 +276,9 @@ class _Builder:
             for name, t in build_ref_map(project).items()
         }
         # model -> join entities, sorted by entity name.
-        self.keys: dict[str, list[_Key]] = {name: self._keys(sm) for name, sm in self.models.items()}
+        self.keys: dict[str, list[_Key]] = {
+            name: self._keys(sm) for name, sm in self.models.items()
+        }
         # entity name -> models where it is a primary or unique key.
         self.parents: dict[str, list[_Key]] = {}
         for keys in self.keys.values():
@@ -501,7 +503,9 @@ class _Builder:
             if item.filter is not None:
                 return f"its input {item.name!r} has a filter"
             if item.offset_window is not None or item.offset_to_grain is not None:
-                return f"its input {item.name!r} has an offset, which has no semantic view equivalent"
+                return (
+                    f"its input {item.name!r} has an offset, which has no semantic view equivalent"
+                )
             if item.name not in simple:
                 if kinds.get(item.name) == MetricType.SIMPLE:
                     return f"its input {item.name!r} is itself skipped"
@@ -514,7 +518,9 @@ class _Builder:
 
     def view(self, root: str) -> SemanticViewSpec:
         order, relationships = self._closure(root)
-        metrics = sorted((m for m in self.metrics.values() if m.table == root), key=lambda m: m.name)
+        metrics = sorted(
+            (m for m in self.metrics.values() if m.table == root), key=lambda m: m.name
+        )
         derived = sorted(
             (d for d in self.derived.values() if _derived_table(d) == root), key=lambda d: d.name
         )
@@ -523,8 +529,8 @@ class _Builder:
         clashes = sorted(metric_names & root_dimensions)
         if clashes:
             raise SemanticViewError(
-                f"metric {clashes[0]!r} has the same name as a dimension of semantic model {root!r}; "
-                "a semantic view cannot hold both. Rename one of them."
+                f"metric {clashes[0]!r} has the same name as a dimension of semantic model "
+                f"{root!r}; a semantic view cannot hold both. Rename one of them."
             )
         tables: list[TableSpec] = []
         dimensions: list[DimensionSpec] = []

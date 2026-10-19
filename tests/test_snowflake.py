@@ -8,7 +8,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import pytest
-from dbt_s_layer.snowflake import quote_identifier, render_snowflake, sql_string
 
 from dbt_s_layer.errors import ExportRenderError, SemanticViewError
 from dbt_s_layer.project import load_project
@@ -25,6 +24,7 @@ from dbt_s_layer.semantic_views import (
     TableSpec,
     build_semantic_views,
 )
+from dbt_s_layer.snowflake import quote_identifier, render_snowflake, sql_string
 from tests.conftest import ARTIFACT_SETS, EXPORT_SETS
 
 if TYPE_CHECKING:
