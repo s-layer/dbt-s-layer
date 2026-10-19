@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 4 complete; Phase 5 next
+stopped_at: Phase 5 complete; Phase 6 next
 last_updated: "2026-10-19T15:00:00.000Z"
-last_activity: 2026-10-19 -- Phase 4 researched, planned, executed and verified
+last_activity: 2026-10-19 -- Phase 5 researched, planned, executed and verified
 progress:
   total_phases: 9
-  completed_phases: 5
-  total_plans: 18
-  completed_plans: 18
-  percent: 56
+  completed_phases: 6
+  total_plans: 21
+  completed_plans: 21
+  percent: 67
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-19)
 
 **Core value:** dbt Core users can materialise semantic models and exports directly in the warehouse with no dbt Cloud subscription — semantic YAML remains the single source of truth, generated models are first-class DAG nodes.
-**Current focus:** Phase 5 — Pre-Commit Hook
+**Current focus:** Phase 6 — Databricks Adapter
 
 ## Current Position
 
-Phase: 5 of 8 (Pre-Commit Hook)
+Phase: 6 of 8 (Databricks Adapter)
 Plan: — of — in current phase
 Status: Ready to plan
-Last activity: 2026-10-19 -- Phase 4 executed (4 plans) and verified
+Last activity: 2026-10-19 -- Phase 5 executed (3 plans) and verified
 
-Progress: [██████░░░░] 5 of 9 phases (18 of 18 planned plans)
+Progress: [███████░░░] 6 of 9 phases (21 of 21 planned plans)
 
 ## Performance Metrics
 
@@ -64,6 +64,8 @@ Recent decisions affecting current work:
 - Fusion binary subprocess + Python metricflow (handles both YAML specs without ELv2 contamination)
 - Sentinel prefix for ref() rewriting (narrow public MetricFlow surfaces)
 - Pin only `metricflow==0.213.0`; load manifests via its bundled `metricflow_semantic_interfaces` (pydantic v1 models), not `dbt-semantic-interfaces`
+- Pre-commit hook runs `dbt parse` (dbtf, else dbt; `--dbt`, `--no-parse`) then `generate`, and exits 1 when it changed files (pre-commit does not notice new untracked files)
+- Exports render on one shared MetricFlowEngine set-up with a fresh planner per saved query, in a forked process pool (byte-identical to an engine per saved query; private metricflow attributes guarded in test_stack_surface.py)
 - Databricks metric views target `dbt-databricks >= 1.12.0` (GA; databricks/dbt-databricks#1106 closed by PR #1285, latest 1.12.7), no longer the 1.12.0a1 alpha
 
 ### Pending Todos
@@ -80,6 +82,8 @@ See `_notes/` directory for captured todos:
 - Phase 6/7 reuse `semantic_views.SemanticViewSpec` and add a renderer to the dispatch in `render_semantic_views`; until then non-Snowflake adapters warn once and get no `sem__` files
 - dbt Core 1.12.6 cannot compile a project whose package holds a new-spec semantic model ("depends on 'semantic_model.fx.stores' which is not in the graph"), with or without dbt-s-layer; the Core compile test uses the legacy-spec twin `snowflake_legacy`
 - ~~Fusion 2.0.8 warns dbt0101 on the `exp__items_by_country` export SQL at compile~~ Resolved in review round 2: the cause was metricflow rendering the entity `order` unquoted (dbt-labs/metricflow#2058), which Snowflake also rejects; exports now quote reserved column names (`dbt_s_layer.quoting`)
+- HOOK-02's 5 s holds with Fusion (4.0 to 4.3 s on the 100/50 project, 4 cores); with dbt Core the hook takes 10 to 12 s because Core's own `dbt parse` takes 5.4 s or more (start-up bound)
+- The hook's README snippet uses `rev: develop` until a release tag exists (Phase 8)
 - Minimum supported Fusion version: only 2.0.8 tested; documented as tested, older 2.x not hard-failed (01-RESEARCH.md)
 - Verified 2026-10-19: Fusion 2.0.8 and dbt Core 1.12.6 manifests (both specs) load via `parse_manifest_from_dbt_generated_manifest` and render through `explain()` (01-RESEARCH.md)
 - dbt Core 1.12.6 silently drops semantic models attached to versioned models; `check_artifacts` warns on it (01-04), as it does for Fusion ignoring legacy-spec semantic models
@@ -89,5 +93,5 @@ See `_notes/` directory for captured todos:
 ## Session Continuity
 
 Last session: 2026-10-19
-Stopped at: Phase 4 complete; next Phase 5 planning
+Stopped at: Phase 5 complete; next Phase 6 planning
 Resume file: None

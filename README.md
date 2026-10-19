@@ -155,6 +155,44 @@ Each of these is skipped with one warning naming it; the rest of the view is sti
 | Ratio and derived metrics with an offset, a filter, or inputs from another semantic model or another derived metric | Only metrics of the same view can be combined without changing their meaning. |
 | `fill_nulls_with`, `join_to_timespine` | Ignored (with a warning); the metric is generated without them. |
 
+## Pre-commit hook
+
+The `dbt-s-layer` hook regenerates the models when you commit a change to your semantic YAML, so the generated files never fall behind. Add it to your repository's `.pre-commit-config.yaml`:
+
+```yaml
+repos:
+  - repo: https://github.com/s-layer/dbt-s-layer
+    rev: develop  # no release tag yet: pin a commit SHA, and run `pre-commit autoupdate` once tags exist
+    hooks:
+      - id: dbt-s-layer
+```
+
+Then `pre-commit install` (or `prek install`). On a commit that stages semantic YAML, the hook:
+
+1. finds the dbt project of each staged file (the nearest `dbt_project.yml` that names a `profile`, so a project in a subdirectory works and a local package counts as part of the project that installs it),
+2. runs `dbt parse` in it, with `dbtf` if it is on `PATH`, else `dbt`,
+3. runs `dbt-s-layer generate`,
+4. fails the commit if it wrote, changed or deleted anything, and lists the files. Stage them (`git add`) and commit again; the second run changes nothing and passes.
+
+Only files that hold a `semantic_models:`, `semantic_model:`, `metrics:` or `saved_queries:` key, a `dbt_project.yml`, or a generated file trigger it. A commit without any of them skips the hook in a fraction of a second. A hand edit to a generated file is put back. Deleting a semantic YAML file does not trigger the hook (pre-commit only passes files that exist), so keep `dbt-s-layer check` in CI as well.
+
+`dbt parse` needs a profile, as it always does. The hook passes `generate`'s options through `args`, and has two of its own:
+
+```yaml
+      - id: dbt-s-layer
+        args: [--target, dev, --profiles-dir, analytics/profiles, --dbt, .venv/bin/dbt]
+```
+
+| Option | |
+|---|---|
+| `--dbt` | The executable that parses, for example a dbt Core in a virtualenv that is not activated. Paths are relative to the repository root. |
+| `--no-parse` | Don't run `dbt parse`: something else parses first (another hook). `generate` still refuses artifacts older than the YAML. |
+| `--project-dir`, `--output-dir`, `--target`, `--adapter`, `--profiles-dir` | As for `generate`. `--target` and `--profiles-dir` also go to `dbt parse`. |
+
+pre-commit installs dbt-s-layer in its own environment, so it never touches the dbt you run. Your dbt engine still has to be on `PATH` (or named with `--dbt`).
+
+**Speed.** On a project with 100 semantic models and 50 exports (`scripts/make_scale_project.py`), on a 4-core Linux machine, the hook takes 4.0 to 4.4 s after a YAML edit with dbt Fusion 2.0.8, whose `dbt parse` takes 0.7 s. dbt Core's own `dbt parse` takes 5.4 to 6.6 s on the same project (more than half of it is dbt's start-up), so with dbt Core the hook takes 10 to 12 s. Saved queries are rendered in parallel on Linux and macOS; set `DBT_S_LAYER_JOBS=1` to use one process.
+
 ## License
 
 Apache-2.0. See [LICENSE](./LICENSE).
