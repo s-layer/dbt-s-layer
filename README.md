@@ -1,6 +1,6 @@
 # dbt-s-layer
 
-dbt Cloud semantic-layer features for dbt Core / Fusion users.
+dbt semantic-layer features for dbt Core / Fusion users, no dbt Cloud required.
 
 `dbt-s-layer` is a Python package that reads dbt semantic YAML (via `semantic_manifest.json`) and code-generates two families of dbt models:
 
