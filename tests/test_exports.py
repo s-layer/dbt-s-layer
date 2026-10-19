@@ -89,6 +89,15 @@ def _mutate(
     dbt: Callable[[dict[str, Any]], None] | None = None,
 ) -> Path:
     project_dir = make_project(set_name)
+    _rewrite(project_dir, semantic, dbt)
+    return project_dir
+
+
+def _rewrite(
+    project_dir: Path,
+    semantic: Callable[[dict[str, Any]], None] | None = None,
+    dbt: Callable[[dict[str, Any]], None] | None = None,
+) -> None:
     for file, mutate in (("semantic_manifest.json", semantic), ("manifest.json", dbt)):
         if mutate is None:
             continue
@@ -96,7 +105,6 @@ def _mutate(
         raw: dict[str, Any] = json.loads(path.read_text())
         mutate(raw)
         path.write_text(json.dumps(raw))
-    return project_dir
 
 
 def _by_file(models: tuple[ExportModel, ...]) -> dict[str, ExportModel]:
@@ -226,8 +234,6 @@ def test_a_model_does_not_depend_on_other_saved_queries(
 ) -> None:
     # One metricflow engine renders saved queries differently depending on what
     # it rendered before, so each saved query needs its own engine.
-    full = _by_file(render_exports(load_project(make_project(set_name))))
-
     def only_items(raw: dict[str, Any]) -> None:
         raw["saved_queries"] = [q for q in raw["saved_queries"] if q["name"] == "items_by_country"]
 
@@ -236,7 +242,10 @@ def test_a_model_does_not_depend_on_other_saved_queries(
             k: v for k, v in raw["saved_queries"].items() if k.endswith(".items_by_country")
         }
 
-    alone = render_exports(load_project(_mutate(make_project, set_name, only_items, only_items_dbt)))
+    project_dir = make_project(set_name)
+    full = _by_file(render_exports(load_project(project_dir)))
+    _rewrite(project_dir, only_items, only_items_dbt)
+    alone = render_exports(load_project(project_dir))
     assert len(alone) == 1
     assert alone[0].body == full[alone[0].file_name].body
 
@@ -316,27 +325,32 @@ def test_unknown_export_as(make_project: MakeProject) -> None:
         render_exports(project)
 
 
-def test_file_name_collision(make_project: MakeProject) -> None:
-    # Saved query `revenue_by_day__exp` + export `revenue_by_day` and saved
-    # query `revenue_by_day` + export `exp__revenue_by_day` share a file name.
+def test_duplicate_export_names(make_project: MakeProject) -> None:
     def rename(raw: dict[str, Any]) -> None:
-        for sq in raw["saved_queries"]:
-            if sq["name"] == "cumulative_revenue":
-                sq["name"] = "revenue_by_day__exp"
-                sq["exports"][0]["name"] = "revenue_by_day"
-            if sq["name"] == "revenue_by_day":
-                sq["exports"][0]["name"] = "exp__revenue_by_day"
+        sq = next(q for q in raw["saved_queries"] if q["name"] == "revenue_by_day")
+        sq["exports"][1]["name"] = "exp_revenue_by_day"
 
     def rename_dbt(raw: dict[str, Any]) -> None:
-        queries = raw["saved_queries"]
-        cumulative = queries.pop("saved_query.fx.cumulative_revenue")
-        cumulative.update(name="revenue_by_day__exp", unique_id="saved_query.fx.revenue_by_day__exp")
-        cumulative["exports"][0]["name"] = "revenue_by_day"
-        queries["saved_query.fx.revenue_by_day__exp"] = cumulative
-        queries["saved_query.fx.revenue_by_day"]["exports"][0]["name"] = "exp__revenue_by_day"
+        raw["saved_queries"]["saved_query.fx.revenue_by_day"]["exports"][1]["name"] = (
+            "exp_revenue_by_day"
+        )
 
     project = load_project(_mutate(make_project, "core_export", rename, rename_dbt))
-    with pytest.raises(
-        ExportRenderError, match=r"exp__revenue_by_day__exp__revenue_by_day\.sql.*both"
-    ):
+    with pytest.raises(ExportRenderError, match=r"exp__revenue_by_day__exp_revenue_by_day\.sql.*both"):
+        render_exports(project)
+
+
+@pytest.mark.parametrize("name", ["../escape", "a/b", "with space", "Ünïcode", ""])
+def test_export_names_must_make_safe_file_names(name: str, make_project: MakeProject) -> None:
+    # metricflow validates saved query names but not export names, which become
+    # part of a file name and a dbt model name.
+    def rename(raw: dict[str, Any]) -> None:
+        sq = next(q for q in raw["saved_queries"] if q["name"] == "revenue_by_day")
+        sq["exports"][0]["name"] = name
+
+    def rename_dbt(raw: dict[str, Any]) -> None:
+        raw["saved_queries"]["saved_query.fx.revenue_by_day"]["exports"][0]["name"] = name
+
+    project = load_project(_mutate(make_project, "core_export", rename, rename_dbt))
+    with pytest.raises(ExportRenderError, match=r"revenue_by_day.*letters, digits and underscores"):
         render_exports(project)
