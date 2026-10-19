@@ -29,18 +29,18 @@
 
 ### File Output
 
-- [ ] **OUTPT-01**: Tool generates a `_semantic_views.yml` companion schema file alongside generated `sem__*.sql` and `exp__*.sql` models
-- [ ] **OUTPT-02**: Generated output is deterministic and byte-stable — identical YAML inputs produce byte-identical output files across runs (sorted keys, stable ordering, no embedded timestamps)
-- [ ] **OUTPT-03**: File writes are atomic — all files for a run are written to a staging directory first, then moved into place with `os.replace`, so a partial run never leaves the output directory in an inconsistent state
-- [ ] **OUTPT-04**: Output directory is configurable (default: `models/semantic/`); generated files are prefixed `sem__` (semantic view models) and `exp__` (export models)
-- [ ] **OUTPT-05**: Generated files include a header comment marking them as auto-generated and identifying the source semantic model or saved query, to prevent accidental hand-editing
+- [x] **OUTPT-01**: Tool generates a `_semantic_views.yml` companion schema file alongside generated `sem__*.sql` and `exp__*.sql` models
+- [x] **OUTPT-02**: Generated output is deterministic and byte-stable — identical YAML inputs produce byte-identical output files across runs (sorted keys, stable ordering, no embedded timestamps)
+- [x] **OUTPT-03**: File writes are atomic — all files for a run are written to a staging directory first, then moved into place with `os.replace`, so a partial run never leaves the output directory in an inconsistent state
+- [x] **OUTPT-04**: Output directory is configurable (default: `models/semantic/`); generated files are prefixed `sem__` (semantic view models) and `exp__` (export models)
+- [x] **OUTPT-05**: Generated files include a header comment marking them as auto-generated and identifying the source semantic model or saved query, to prevent accidental hand-editing
 
 ### CLI
 
-- [ ] **CLI-01**: `dbt-s-layer generate` command runs the full codegen pipeline for a dbt project directory
-- [ ] **CLI-02**: `dbt-s-layer check` command re-runs codegen into a temp directory and exits non-zero if the output differs from committed files — suitable for CI enforcement
-- [ ] **CLI-03**: `dbt-s-layer doctor` command validates the environment: `semantic_manifest.json` presence and freshness, supported metricflow version, and output directory writability
-- [ ] **CLI-04**: `dbt-s-layer generate` accepts `--project-dir`, `--output-dir`, `--target` (dbt target name), and `--adapter` (warehouse override) flags
+- [x] **CLI-01**: `dbt-s-layer generate` command runs the full codegen pipeline for a dbt project directory
+- [x] **CLI-02**: `dbt-s-layer check` command re-runs codegen into a temp directory and exits non-zero if the output differs from committed files — suitable for CI enforcement
+- [x] **CLI-03**: `dbt-s-layer doctor` command validates the environment: `semantic_manifest.json` presence and freshness, supported metricflow version, and output directory writability
+- [x] **CLI-04**: `dbt-s-layer generate` accepts `--project-dir`, `--output-dir`, `--target` (dbt target name), and `--adapter` (warehouse override) flags
 - [x] **CLI-05**: All commands produce actionable error messages when `semantic_manifest.json` is missing or older than the most recently modified semantic YAML file, prompting the user to run `dbt parse` or `dbtf parse`
 
 ### Pre-commit Hook
@@ -95,15 +95,15 @@
 | SEMVW-03 | Phase 6 | Pending |
 | SEMVW-04 | Phase 7 | Pending |
 | SEMVW-05 | Phase 4 | Pending |
-| OUTPT-01 | Phase 3 | Pending |
-| OUTPT-02 | Phase 3 | Pending |
-| OUTPT-03 | Phase 3 | Pending |
-| OUTPT-04 | Phase 3 | Pending |
-| OUTPT-05 | Phase 3 | Pending |
-| CLI-01 | Phase 3 | Pending |
-| CLI-02 | Phase 3 | Pending |
-| CLI-03 | Phase 0 | Partial (engine + metricflow checks in Phase 0, artifact freshness via `--project-dir` in Phase 1; output dir in Phase 3) |
-| CLI-04 | Phase 3 | Pending |
+| OUTPT-01 | Phase 3 | Complete |
+| OUTPT-02 | Phase 3 | Complete |
+| OUTPT-03 | Phase 3 | Complete |
+| OUTPT-04 | Phase 3 | Complete |
+| OUTPT-05 | Phase 3 | Complete |
+| CLI-01 | Phase 3 | Complete |
+| CLI-02 | Phase 3 | Complete |
+| CLI-03 | Phase 0 | Complete (output directory check in Phase 3) |
+| CLI-04 | Phase 3 | Complete |
 | CLI-05 | Phase 1 | Complete (`check_artifacts`; Phase 3 `generate`/`check` must call it) |
 | HOOK-01 | Phase 5 | Pending |
 | HOOK-02 | Phase 5 | Pending |

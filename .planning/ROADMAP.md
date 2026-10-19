@@ -17,7 +17,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 0: Foundation & Governance** - Repo scaffold, license CI, stack verification spike, doctor stub
 - [x] **Phase 1: Parsing Pipeline** - Read `semantic_manifest.json` + `manifest.json`, build ref/source sentinel map
 - [x] **Phase 2: Export SQL Generation** - MetricFlow engine integration + sentinel-prefix `ref()` rewriting (HIGH RISK)
-- [ ] **Phase 3: File Output + CLI** - Atomic byte-stable writer, `generate` / `check` commands, companion YAML
+- [x] **Phase 3: File Output + CLI** - Atomic byte-stable writer, `generate` / `check` commands, companion YAML
 - [ ] **Phase 4: Snowflake Adapter** - `sem__*.sql` via `dbt_semantic_view` package (HIGH RISK)
 - [ ] **Phase 5: Pre-Commit Hook** - `.pre-commit-hooks.yaml` triggering regeneration on YAML changes
 - [ ] **Phase 6: Databricks Adapter** - `sem__*.sql` via `dbt-databricks` metric view materialisation (alpha: 1.12.0a1)
@@ -78,13 +78,16 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Depends on**: Phase 2
 **Requirements**: OUTPT-01, OUTPT-02, OUTPT-03, OUTPT-04, OUTPT-05, CLI-01, CLI-02, CLI-04
 **Success Criteria** (what must be TRUE):
-  1. `dbt-s-layer generate --project-dir . --output-dir models/semantic/` writes `sem__*.sql`, `exp__*.sql`, and `_semantic_views.yml` to the configured directory
+  1. `dbt-s-layer generate --project-dir . --output-dir models/semantic/` writes `sem__*.sql`, `exp__*.sql`, and `_semantic_views.yml` to the configured directory (`sem__*.sql` arrive with Phase 4; the writer already owns the prefix)
   2. Running `generate` twice on identical inputs produces byte-identical outputs (sorted keys, stable ordering, no timestamps)
   3. A partial/interrupted run never leaves the output directory in an inconsistent state (writes staged to a temp dir and `os.replace`d atomically)
   4. Every generated file begins with an auto-generated header comment identifying the source semantic model or saved query
   5. `dbt-s-layer check` exits non-zero when committed generated files differ from a fresh re-generation, suitable for CI gating
   6. `--project-dir`, `--output-dir`, `--target`, and `--adapter` flags are all honoured with sensible defaults
-**Plans**: TBD
+**Plans**: 3 plans
+- [x] 03-01-PLAN.md — Render, apply and diff generated files
+- [x] 03-02-PLAN.md — `generate` / `check`, `--target` / `--adapter`, clashes with user models
+- [x] 03-03-PLAN.md — `doctor --output-dir`, README, end-to-end check
 
 ### Phase 4: Snowflake Adapter
 **Goal**: Every `semantic_model` in the user's YAML produces a `sem__*.sql` model that materialises as a Snowflake `SEMANTIC VIEW` via the `dbt_semantic_view` package, with correct DAG edges to upstream tables
@@ -151,7 +154,7 @@ Phases execute in numeric order: 0 → 1 → 2 → 3 → 4 → 5 → 6 → 7 →
 | 0. Foundation & Governance | 4/4 | Complete | 2026-10-19 |
 | 1. Parsing Pipeline | 4/4 | Complete | 2026-10-19 |
 | 2. Export SQL Generation | 3/3 | Complete | 2026-10-19 |
-| 3. File Output + CLI | 0/TBD | Not started | - |
+| 3. File Output + CLI | 3/3 | Complete | 2026-10-19 |
 | 4. Snowflake Adapter | 0/TBD | Not started | - |
 | 5. Pre-Commit Hook | 0/TBD | Not started | - |
 | 6. Databricks Stub Adapter | 0/TBD | Not started | - |
