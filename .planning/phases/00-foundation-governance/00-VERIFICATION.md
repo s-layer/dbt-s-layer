@@ -15,7 +15,7 @@ Verified on 2026-10-19 against the ROADMAP success criteria, with a close-out re
 | 1 | `uv run pytest` passes in a fresh clone | `uv sync --locked --dev && uv run pytest`: 18 passed on 3.11, 3.12, 3.13 and 3.14 | ✅ |
 | 2 | CI runs ruff, basedpyright and pytest (no license scan) | `quality.yml` runs `prek run --all-files` (ruff, ruff-format, basedpyright strict, uv-lock) then pytest on the 3.11–3.14 matrix; CI runs 2–4 green. No license step anywhere (D-04) | ✅ |
 | 3 | `--help` and `doctor --help` work from a pip-installed build | Built the wheel with `uv build`, installed it into a clean venv: both print usage; wheel ships `py.typed` and the console-script entry point | ✅ |
-| 4 | `doctor` detects `dbtf` and reports the metricflow version | Clean-venv run printed the Fusion install URL and `metricflow version` and exited 1 with no `dbtf` on PATH; unit tests cover exit codes 0/1/2; new CLI test proves the command exits with `run_doctor()`'s code | ✅ |
+| 4 | `doctor` detects `dbtf` and reports the metricflow version | Run against real binaries: Fusion 2.0.8 (installed as `dbt`) and dbt Core 1.12.6 both report OK and exit 0; with neither on PATH it prints both install links and exits 1. Unit tests cover detection order, version parsing, the Core 1.7 floor and exit codes 0/1/2; a CLI test proves the command exits with `run_doctor()`'s code | ✅ (widened, see 7) |
 | 5 | metricflow-family pins committed after the spike settles Pydantic v1/v2 | `metricflow==0.213.0` pinned; `spike/results-2026-10-19.txt` exits 0; `PydanticSemanticManifest` is a `pydantic.v1` model (asserted in `tests/test_stack_surface.py`) | ✅ (re-pinned, see below) |
 
 CLI-03 is only partly delivered by Phase 0, as planned: manifest freshness lands in Phase 1 and output-directory writability in Phase 3.
@@ -32,7 +32,10 @@ CLI-03 is only partly delivered by Phase 0, as planned: manifest freshness lands
    **Fix:** `tests/test_stack_surface.py` asserts the installed metricflow equals the pin, the manifest model is pydantic v1, `SqlTable.from_string` parses 2- and 3-part names and round-trips `.sql`, and `MetricFlowEngine.explain` exists.
 5. **No test covered the `doctor` command's exit status** (only its `--help`).
    **Fix:** parametrised CliRunner test over exit codes 0/1/2.
-6. **Bookkeeping:** 00-04 had no SUMMARY and ROADMAP/STATE still read 0/4. Written and updated.
+6. **`doctor` missed a standard Fusion install.** The Fusion installer names the binary `dbt` and only adds `dbtf` as a shell alias, which `shutil.which` cannot see.
+7. **Fusion is no longer the only engine that works.** dbt Core 1.12.6 writes `semantic_manifest.json` for both the legacy and the new YAML spec; Fusion 2.0.8 ignores legacy-spec semantic models entirely (warning dbt1157, no semantic manifest). All three manifests load through `metricflow_semantics.model.dbt_manifest_parser.parse_manifest_from_dbt_generated_manifest` and render export SQL with `explain()`.
+   **Fix (6 and 7, Anentropic chose "either engine" on 2026-10-19):** `doctor` now accepts Fusion (as `dbtf`, or `dbt` reporting 2.x) or dbt Core >= 1.7, and fails only when neither is found.
+8. **Bookkeeping:** 00-04 had no SUMMARY and ROADMAP/STATE still read 0/4. Written and updated.
 
 ## Carried into Phase 1
 

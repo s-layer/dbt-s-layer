@@ -26,7 +26,7 @@ def _main() -> None:  # pyright: ignore[reportUnusedFunction]
 
 @app.command()
 def doctor() -> None:
-    """Report environment diagnostics (Fusion binary, metricflow version)."""
+    """Report environment diagnostics (dbt engine, metricflow version)."""
     from dbt_s_layer._doctor import run_doctor
 
     raise typer.Exit(code=run_doctor())
