@@ -20,3 +20,19 @@
   (`UPDATE_SNAPSHOTS=1` rewrites them; a missing snapshot fails).
 - Tests committed red first: tests/test_snowflake.py (renderer, quoting, literals, shadowing,
   snapshots).
+
+## Review round 1
+
+- Trailing line comments: exprs are pasted inline, so an expr ending in `-- comment` swallowed
+  the `,`, the aggregate's `)` or the `COMMENT` after it. `_expr` (used for dimensions, every
+  aggregate including the percentiles, and the text parts of derived metrics) scans the expr
+  with `scan_sql` and appends a newline when its last token is a `--` comment. Other exprs are
+  byte-identical, so no snapshot changed; a `/* */` comment, `--` in a string literal or quoted
+  identifier, and an expr already ending in a newline are left alone.
+- Name shadowing no longer takes type names and date parts for columns. `_references` skips,
+  structurally: the identifier after `::` or after `AS` (the type of `CAST`/`TRY_CAST`), the
+  second word of `double precision`/`character varying`, the first argument of `DATE_TRUNC`,
+  `DATEADD`, `DATEDIFF`, `DATE_PART`, `TIMEADD`, `TIMEDIFF`, `TIMESTAMPADD`, `TIMESTAMPDIFF`, the
+  part in `EXTRACT(part FROM ...)` and the second argument of `LAST_DAY`. Date parts are not an
+  ignore list of words: a column named `year` used as `MAX(year)` or as `DATEADD`'s amount still
+  shadows. The reserved-word quoting set is unchanged.

@@ -22,3 +22,13 @@
   files, since that set was parsed on Snowflake.
 - Tests committed red first: test_output.py (+16), test_cli_generate.py (+3), test_doctor.py
   (+3), test_artifacts.py (+2).
+
+## Review round 1
+
+- Templated folder `+schema`: a test now covers an export aliased `SEM__ORDERS` clashing with
+  `sem__orders` in "the output directory's schema" (it passed against the existing code).
+- doctor's `dbt_semantic_view` check is unchanged. It keys on the manifest's `adapter_type`
+  because `doctor` has no `--adapter`/`--target`. The proposed "at least one semantic model"
+  condition is already implied: metricflow rejects a semantic manifest with no semantic models
+  ("No semantic models present in the model."), so doctor reports the artifacts as an ERROR and
+  never reaches the package check.

@@ -14,7 +14,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from dbt_s_layer.errors import SemanticViewError
-from dbt_s_layer.semantic_views import MetricRef, scan_sql
+from dbt_s_layer.semantic_views import MetricRef, SqlToken, scan_sql
 from dbt_s_layer.sentinels import escape_jinja, postflight
 
 if TYPE_CHECKING:
@@ -160,6 +160,23 @@ _DDL_WORDS = frozenset(
 # reference to an element named `end`.
 _EXPRESSION_KEYWORDS = RESERVED_WORDS | {"ASC", "DESC", "END", "INTERVAL", "NULLS"}
 
+# Functions whose first argument is a date or time part keyword, as in
+# `DATE_TRUNC(month, x)`; `month` there is no column.
+_DATE_PART_FIRST = frozenset(
+    [
+        "DATEADD",
+        "DATEDIFF",
+        "DATE_PART",
+        "DATE_TRUNC",
+        "TIMEADD",
+        "TIMEDIFF",
+        "TIMESTAMPADD",
+        "TIMESTAMPDIFF",
+    ]
+)
+# The second word of a two-word type name, as in `::double precision`.
+_TYPE_SECOND_WORDS = frozenset(["PRECISION", "VARYING"])
+
 _SIMPLE_AGGREGATIONS = {
     "sum": "SUM({})",
     "min": "MIN({})",
@@ -194,6 +211,21 @@ def _qualified(table: str, name: str) -> str:
     return f"{quote_identifier(table)}.{quote_identifier(name)}"
 
 
+def _expr(expr: str) -> str:
+    """
+    Return a user expr for the DDL: Jinja escaped, a trailing line comment ended.
+
+    Exprs are pasted inline, so an expr ending in `-- comment` would comment out
+    the `,`, `)` or `COMMENT` that follows it on the line. Such an expr gets a
+    newline; every other expr is returned as it was.
+    """
+    text = escape_jinja(expr)
+    tokens = scan_sql(expr)
+    if tokens and tokens[-1].text.startswith("--"):
+        return text + "\n"
+    return text
+
+
 def _clause(keyword: str, items: list[str]) -> str:
     return f"{keyword} (\n" + ",\n".join(items) + "\n)\n"
 
@@ -210,11 +242,11 @@ def _table(table: TableSpec) -> str:
 
 def _dimension(dimension: DimensionSpec) -> str:
     name = _qualified(dimension.table, dimension.name)
-    return f"  {name} AS {escape_jinja(dimension.expr)}{_comment(dimension.comment)}"
+    return f"  {name} AS {_expr(dimension.expr)}{_comment(dimension.comment)}"
 
 
 def _aggregate(view: str, metric: MetricSpec) -> str:
-    expr = escape_jinja(metric.expr)
+    expr = _expr(metric.expr)
     if metric.agg != "percentile":
         return _SIMPLE_AGGREGATIONS[metric.agg].format(expr)
     percentile = metric.percentile
@@ -249,8 +281,7 @@ def _metric(view: str, metric: MetricSpec) -> str:
 
 def _derived(metric: DerivedMetricSpec) -> str:
     expr = "".join(
-        _qualified(p.table, p.name) if isinstance(p, MetricRef) else escape_jinja(p)
-        for p in metric.parts
+        _qualified(p.table, p.name) if isinstance(p, MetricRef) else _expr(p) for p in metric.parts
     )
     private = "PRIVATE " if metric.private else ""
     return f"  {private}{quote_identifier(metric.name)} AS {expr}{_comment(metric.comment)}"
@@ -259,16 +290,74 @@ def _derived(metric: DerivedMetricSpec) -> str:
 # --- name shadowing (04-RESEARCH, open risk 2) ------------------------------------
 
 
+def _not_a_column(tokens: list[SqlToken], i: int, calls: list[tuple[str, int]]) -> bool:
+    """
+    Whether identifier `tokens[i]` is a type name or a date part rather than a column.
+
+    `tokens` holds the significant tokens of an expr; `calls` the enclosing open
+    parens, innermost last, as (upper-case function name or "", argument index).
+    """
+
+    def text(j: int) -> str:
+        return tokens[j].text.upper() if 0 <= j < len(tokens) else ""
+
+    # `x::date`, `CAST(x AS date)`, `TRY_CAST(x AS timestamp)`.
+    if text(i - 1) == "AS" or (text(i - 1) == ":" and text(i - 2) == ":"):
+        return True
+    # `::double precision`
+    if (
+        i > 0
+        and text(i) in _TYPE_SECOND_WORDS
+        and tokens[i - 1].identifier
+        and _not_a_column(tokens, i - 1, calls)
+    ):
+        return True
+    if not calls:
+        return False
+    function, argument = calls[-1]
+    if function in _DATE_PART_FIRST:
+        return argument == 0 and text(i - 1) == "(" and text(i + 1) == ","
+    if function == "EXTRACT":
+        return argument == 0 and text(i - 1) == "(" and text(i + 1) == "FROM"
+    if function == "LAST_DAY":
+        return argument == 1 and text(i - 1) == "," and text(i + 1) == ")"
+    return False
+
+
 def _references(expr: str, table: str) -> set[str]:
-    """Lower-cased names `expr` may resolve against `table`'s own elements."""
+    """
+    Lower-cased names `expr` may resolve against `table`'s own elements.
+
+    Keywords, type names (after `::` or a CAST's `AS`) and date parts (the first
+    argument of `DATE_TRUNC`, `DATEADD`..., `EXTRACT(part FROM ...)`) are not
+    references; a column named like a date part elsewhere in the expr still is.
+    """
     names: set[str] = set()
-    tokens = scan_sql(expr)
+    tokens = [t for t in scan_sql(expr) if t.text.strip() and not t.text.startswith(("--", "/*"))]
+    calls: list[tuple[str, int]] = []
     previous: str | None = None
-    for token in tokens:
+    for i, token in enumerate(tokens):
+        if token.text == "(":
+            before = tokens[i - 1] if i > 0 else None
+            name = before.text.upper() if before is not None and before.call else ""
+            calls.append((name, 0))
+            continue
+        if token.text == ")":
+            if calls:
+                calls.pop()
+            continue
+        if token.text == "," and calls:
+            calls[-1] = (calls[-1][0], calls[-1][1] + 1)
+            continue
         if not token.identifier:
             continue
         same_table = not token.qualified or (previous is not None and previous.lower() == table)
-        if same_table and not token.call and token.text.upper() not in _EXPRESSION_KEYWORDS:
+        if (
+            same_table
+            and not token.call
+            and token.text.upper() not in _EXPRESSION_KEYWORDS
+            and not _not_a_column(tokens, i, calls)
+        ):
             names.add(token.text.lower())
         previous = token.text
     return names
