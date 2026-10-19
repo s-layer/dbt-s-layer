@@ -46,3 +46,5 @@ Thumbs.db
 tests/fixtures/projects/*/profiles/.user.yml
 tests/fixtures/projects/*/logs/
 tests/fixtures/projects/*/target/
+tests/fixtures/projects/*/dbt_packages/
+tests/fixtures/projects/*/package-lock.yml

@@ -1,0 +1,27 @@
+# The semantic model pins version 1, which is not the latest version.
+models:
+  - name: customers
+    latest_version: 2
+    versions:
+      - v: 1
+      - v: 2
+semantic_models:
+  - name: customers
+    model: ref('customers', v=1)
+    defaults:
+      agg_time_dimension: signed_up_at
+    entities:
+      - name: customer
+        type: primary
+        expr: customer_id
+    dimensions:
+      - name: country
+        type: categorical
+      - name: signed_up_at
+        type: time
+        type_params:
+          time_granularity: day
+    measures:
+      - name: customer_count
+        agg: count_distinct
+        expr: customer_id

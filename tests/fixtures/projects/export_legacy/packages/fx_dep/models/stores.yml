@@ -1,0 +1,20 @@
+semantic_models:
+  - name: stores
+    model: ref('stores')
+    defaults:
+      agg_time_dimension: opened_at
+    entities:
+      - name: store
+        type: primary
+        expr: store_id
+    dimensions:
+      - name: region
+        type: categorical
+      - name: opened_at
+        type: time
+        type_params:
+          time_granularity: day
+    measures:
+      - name: store_count
+        agg: count
+        expr: store_id

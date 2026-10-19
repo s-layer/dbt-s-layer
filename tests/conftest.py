@@ -17,8 +17,13 @@ SET_PROJECTS = {
     "fusion_new": "new_spec",
     "core_new": "new_spec",
     "core_legacy": "legacy_spec",
+    "fusion_export": "export_spec",
+    "core_export": "export_legacy",
 }
-ARTIFACT_SETS = tuple(SET_PROJECTS)
+# Sets the Phase 1 loader tests run over.
+ARTIFACT_SETS = ("fusion_new", "core_new", "core_legacy")
+# Sets parsed from the export fixture projects, with a package and versioned models.
+EXPORT_SETS = ("fusion_export", "core_export")
 
 MakeProject = Callable[[str], Path]
 
@@ -40,7 +45,12 @@ def make_project(tmp_path: Path) -> MakeProject:
 
     def _make(set_name: str) -> Path:
         project_dir = tmp_path / set_name
-        shutil.copytree(PROJECTS / SET_PROJECTS[set_name], project_dir)
+        # Leave out what a local `dbt deps` or `dbt parse` leaves behind (all gitignored).
+        shutil.copytree(
+            PROJECTS / SET_PROJECTS[set_name],
+            project_dir,
+            ignore=shutil.ignore_patterns("target", "logs", "dbt_packages", "package-lock.yml"),
+        )
         target = project_dir / "target"
         target.mkdir()
         for name in ("semantic_manifest.json", "manifest.json"):

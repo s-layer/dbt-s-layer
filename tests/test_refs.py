@@ -11,7 +11,7 @@ import pytest
 from dbt_s_layer.errors import RefResolutionError
 from dbt_s_layer.project import load_project
 from dbt_s_layer.refs import RefTarget, build_ref_map
-from tests.conftest import ARTIFACT_SETS, ARTIFACTS
+from tests.conftest import ARTIFACT_SETS, ARTIFACTS, EXPORT_SETS
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -49,6 +49,28 @@ def _mutated_map(
 
 
 # --- positive cases ---------------------------------------------------------
+
+
+@pytest.mark.parametrize("set_name", EXPORT_SETS)
+def test_package_and_versioned_targets(set_name: str, make_project: MakeProject) -> None:
+    refs = build_ref_map(load_project(make_project(set_name)))
+    assert list(refs) == ["customers", "order_items", "orders", "stores"]
+    stores = refs["stores"]
+    assert (stores.node_id, stores.package, stores.model_name, stores.version) == (
+        "model.fx_dep.stores",
+        "fx_dep",
+        "stores",
+        None,
+    )
+    # The package's own expression: it does not name the package.
+    assert stores.ref_expression == "ref('stores')"
+    customers = refs["customers"]
+    version = 1 if set_name == "core_export" else 2
+    assert (customers.node_id, customers.version, customers.alias) == (
+        f"model.fx.customers.v{version}",
+        version,
+        f"customers_v{version}",
+    )
 
 
 @pytest.mark.parametrize("set_name", ARTIFACT_SETS)

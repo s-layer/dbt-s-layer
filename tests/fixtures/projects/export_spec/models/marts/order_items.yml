@@ -1,0 +1,26 @@
+# The mixed-case alias exercises relation parts that keep their case.
+models:
+  - name: order_items
+    config:
+      alias: Order_Items
+    semantic_model:
+      enabled: true
+    agg_time_dimension: ordered_at
+    columns:
+      - name: order_item_id
+        entity:
+          type: primary
+          name: order_item
+      - name: order_id
+        entity:
+          type: foreign
+          name: order
+      - name: ordered_at
+        granularity: day
+        dimension:
+          type: time
+    metrics:
+      - name: items_sold
+        type: simple
+        agg: sum
+        expr: quantity

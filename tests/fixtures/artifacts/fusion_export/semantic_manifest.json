@@ -1,0 +1,597 @@
+{
+  "metrics": [
+    {
+      "config": null,
+      "description": null,
+      "filter": null,
+      "label": "customer_count",
+      "metadata": null,
+      "name": "customer_count",
+      "time_granularity": null,
+      "type": "simple",
+      "type_params": {
+        "conversion_type_params": null,
+        "cumulative_type_params": null,
+        "denominator": null,
+        "expr": "customer_id",
+        "fill_nulls_with": null,
+        "grain_to_date": null,
+        "input_measures": [],
+        "is_private": false,
+        "join_to_timespine": false,
+        "measure": null,
+        "metric_aggregation_params": {
+          "agg": "count_distinct",
+          "agg_params": {
+            "percentile": null,
+            "use_approximate_percentile": false,
+            "use_discrete_percentile": false
+          },
+          "agg_time_dimension": "signed_up_at",
+          "expr": "customer_id",
+          "non_additive_dimension": null,
+          "semantic_model": "customers"
+        },
+        "metrics": null,
+        "numerator": null,
+        "window": null
+      }
+    },
+    {
+      "config": null,
+      "description": null,
+      "filter": null,
+      "label": "items_sold",
+      "metadata": null,
+      "name": "items_sold",
+      "time_granularity": null,
+      "type": "simple",
+      "type_params": {
+        "conversion_type_params": null,
+        "cumulative_type_params": null,
+        "denominator": null,
+        "expr": "quantity",
+        "fill_nulls_with": null,
+        "grain_to_date": null,
+        "input_measures": [],
+        "is_private": false,
+        "join_to_timespine": false,
+        "measure": null,
+        "metric_aggregation_params": {
+          "agg": "sum",
+          "agg_params": {
+            "percentile": null,
+            "use_approximate_percentile": false,
+            "use_discrete_percentile": false
+          },
+          "agg_time_dimension": "ordered_at",
+          "expr": "quantity",
+          "non_additive_dimension": null,
+          "semantic_model": "order_items"
+        },
+        "metrics": null,
+        "numerator": null,
+        "window": null
+      }
+    },
+    {
+      "config": null,
+      "description": null,
+      "filter": null,
+      "label": "Revenue",
+      "metadata": null,
+      "name": "revenue",
+      "time_granularity": null,
+      "type": "simple",
+      "type_params": {
+        "conversion_type_params": null,
+        "cumulative_type_params": null,
+        "denominator": null,
+        "expr": "amount",
+        "fill_nulls_with": null,
+        "grain_to_date": null,
+        "input_measures": [],
+        "is_private": false,
+        "join_to_timespine": false,
+        "measure": null,
+        "metric_aggregation_params": {
+          "agg": "sum",
+          "agg_params": {
+            "percentile": null,
+            "use_approximate_percentile": false,
+            "use_discrete_percentile": false
+          },
+          "agg_time_dimension": "ordered_at",
+          "expr": "amount",
+          "non_additive_dimension": null,
+          "semantic_model": "orders"
+        },
+        "metrics": null,
+        "numerator": null,
+        "window": null
+      }
+    },
+    {
+      "config": null,
+      "description": null,
+      "filter": null,
+      "label": "revenue_cumulative",
+      "metadata": null,
+      "name": "revenue_cumulative",
+      "time_granularity": null,
+      "type": "cumulative",
+      "type_params": {
+        "conversion_type_params": null,
+        "cumulative_type_params": {
+          "grain_to_date": null,
+          "metric": {
+            "alias": null,
+            "filter": null,
+            "name": "revenue",
+            "offset_to_grain": null,
+            "offset_window": null
+          },
+          "period_agg": "first",
+          "window": null
+        },
+        "denominator": null,
+        "expr": null,
+        "fill_nulls_with": null,
+        "grain_to_date": null,
+        "input_measures": [],
+        "is_private": false,
+        "join_to_timespine": false,
+        "measure": null,
+        "metric_aggregation_params": null,
+        "metrics": null,
+        "numerator": null,
+        "window": null
+      }
+    },
+    {
+      "config": null,
+      "description": null,
+      "filter": null,
+      "label": "store_count",
+      "metadata": null,
+      "name": "store_count",
+      "time_granularity": null,
+      "type": "simple",
+      "type_params": {
+        "conversion_type_params": null,
+        "cumulative_type_params": null,
+        "denominator": null,
+        "expr": "store_id",
+        "fill_nulls_with": null,
+        "grain_to_date": null,
+        "input_measures": [],
+        "is_private": false,
+        "join_to_timespine": false,
+        "measure": null,
+        "metric_aggregation_params": {
+          "agg": "count",
+          "agg_params": {
+            "percentile": null,
+            "use_approximate_percentile": false,
+            "use_discrete_percentile": false
+          },
+          "agg_time_dimension": "opened_at",
+          "expr": "store_id",
+          "non_additive_dimension": null,
+          "semantic_model": "stores"
+        },
+        "metrics": null,
+        "numerator": null,
+        "window": null
+      }
+    }
+  ],
+  "project_configuration": {
+    "dsi_package_version": {
+      "major_version": "0",
+      "minor_version": "0",
+      "patch_version": "0"
+    },
+    "metadata": null,
+    "time_spine_table_configurations": [],
+    "time_spines": [
+      {
+        "custom_granularities": [],
+        "node_relation": {
+          "alias": "metricflow_time_spine",
+          "database": "ANALYTICS",
+          "relation_name": "ANALYTICS.MARTS.metricflow_time_spine",
+          "schema_name": "MARTS"
+        },
+        "primary_column": {
+          "name": "date_day",
+          "time_granularity": "day"
+        }
+      }
+    ]
+  },
+  "saved_queries": [
+    {
+      "description": null,
+      "exports": [
+        {
+          "config": {
+            "alias": "exp_cumulative",
+            "export_as": "table",
+            "schema_name": "MARTS"
+          },
+          "name": "exp_cumulative"
+        }
+      ],
+      "label": null,
+      "metadata": null,
+      "name": "cumulative_revenue",
+      "query_params": {
+        "group_by": [
+          "TimeDimension('metric_time', 'day')"
+        ],
+        "limit": null,
+        "metrics": [
+          "revenue_cumulative"
+        ],
+        "order_by": [],
+        "where": null
+      },
+      "tags": []
+    },
+    {
+      "description": null,
+      "exports": [
+        {
+          "config": {
+            "alias": "exp_items_by_country",
+            "export_as": "table",
+            "schema_name": "sq_schema"
+          },
+          "name": "exp_items_by_country"
+        }
+      ],
+      "label": null,
+      "metadata": null,
+      "name": "items_by_country",
+      "query_params": {
+        "group_by": [
+          "Dimension('customer__country', entity_path=['order'])"
+        ],
+        "limit": null,
+        "metrics": [
+          "items_sold"
+        ],
+        "order_by": [],
+        "where": null
+      },
+      "tags": []
+    },
+    {
+      "description": null,
+      "exports": [
+        {
+          "config": {
+            "alias": "exp_revenue_by_day",
+            "export_as": "table",
+            "schema_name": "MARTS"
+          },
+          "name": "exp_revenue_by_day"
+        },
+        {
+          "config": {
+            "alias": "revenue_daily",
+            "export_as": "view",
+            "schema_name": "reporting"
+          },
+          "name": "exp_revenue_by_day_view"
+        }
+      ],
+      "label": null,
+      "metadata": null,
+      "name": "revenue_by_day",
+      "query_params": {
+        "group_by": [
+          "TimeDimension('order__ordered_at', 'day')"
+        ],
+        "limit": null,
+        "metrics": [
+          "revenue"
+        ],
+        "order_by": [],
+        "where": null
+      },
+      "tags": []
+    },
+    {
+      "description": null,
+      "exports": [
+        {
+          "config": {
+            "alias": "exp_region_country",
+            "export_as": "table",
+            "schema_name": "MARTS"
+          },
+          "name": "exp_region_country"
+        }
+      ],
+      "label": null,
+      "metadata": null,
+      "name": "revenue_by_region_country",
+      "query_params": {
+        "group_by": [
+          "Dimension('store__region')",
+          "Dimension('customer__country')"
+        ],
+        "limit": null,
+        "metrics": [
+          "revenue"
+        ],
+        "order_by": [],
+        "where": {
+          "where_filters": [
+            {
+              "where_sql_template": "{{ Dimension('order__status') }} = 'paid'"
+            }
+          ]
+        }
+      },
+      "tags": []
+    }
+  ],
+  "semantic_models": [
+    {
+      "config": null,
+      "defaults": null,
+      "description": "",
+      "dimensions": [
+        {
+          "config": null,
+          "description": null,
+          "expr": "country",
+          "is_partition": false,
+          "label": null,
+          "metadata": null,
+          "name": "country",
+          "type": "categorical",
+          "type_params": null
+        },
+        {
+          "config": null,
+          "description": null,
+          "expr": "signed_up_at",
+          "is_partition": false,
+          "label": null,
+          "metadata": null,
+          "name": "signed_up_at",
+          "type": "time",
+          "type_params": {
+            "time_granularity": "day",
+            "validity_params": null
+          }
+        }
+      ],
+      "entities": [
+        {
+          "config": {
+            "meta": {}
+          },
+          "description": "",
+          "expr": "customer_id",
+          "label": null,
+          "metadata": null,
+          "name": "customer",
+          "role": null,
+          "type": "primary"
+        }
+      ],
+      "label": null,
+      "measures": [],
+      "metadata": null,
+      "name": "customers",
+      "node_relation": {
+        "alias": "customers_v2",
+        "database": "ANALYTICS",
+        "relation_name": "ANALYTICS.MARTS.customers_v2",
+        "schema_name": "MARTS"
+      },
+      "primary_entity": null
+    },
+    {
+      "config": null,
+      "defaults": null,
+      "description": "",
+      "dimensions": [
+        {
+          "config": null,
+          "description": null,
+          "expr": "ordered_at",
+          "is_partition": false,
+          "label": null,
+          "metadata": null,
+          "name": "ordered_at",
+          "type": "time",
+          "type_params": {
+            "time_granularity": "day",
+            "validity_params": null
+          }
+        }
+      ],
+      "entities": [
+        {
+          "config": {
+            "meta": {}
+          },
+          "description": "",
+          "expr": "order_item_id",
+          "label": null,
+          "metadata": null,
+          "name": "order_item",
+          "role": null,
+          "type": "primary"
+        },
+        {
+          "config": {
+            "meta": {}
+          },
+          "description": "",
+          "expr": "order_id",
+          "label": null,
+          "metadata": null,
+          "name": "order",
+          "role": null,
+          "type": "foreign"
+        }
+      ],
+      "label": null,
+      "measures": [],
+      "metadata": null,
+      "name": "order_items",
+      "node_relation": {
+        "alias": "Order_Items",
+        "database": "ANALYTICS",
+        "relation_name": "ANALYTICS.MARTS.Order_Items",
+        "schema_name": "MARTS"
+      },
+      "primary_entity": null
+    },
+    {
+      "config": null,
+      "defaults": null,
+      "description": "",
+      "dimensions": [
+        {
+          "config": null,
+          "description": null,
+          "expr": "status",
+          "is_partition": false,
+          "label": null,
+          "metadata": null,
+          "name": "status",
+          "type": "categorical",
+          "type_params": null
+        },
+        {
+          "config": null,
+          "description": null,
+          "expr": "ordered_at",
+          "is_partition": false,
+          "label": null,
+          "metadata": null,
+          "name": "ordered_at",
+          "type": "time",
+          "type_params": {
+            "time_granularity": "day",
+            "validity_params": null
+          }
+        }
+      ],
+      "entities": [
+        {
+          "config": {
+            "meta": {}
+          },
+          "description": "",
+          "expr": "order_id",
+          "label": null,
+          "metadata": null,
+          "name": "order",
+          "role": null,
+          "type": "primary"
+        },
+        {
+          "config": {
+            "meta": {}
+          },
+          "description": "",
+          "expr": "customer_id",
+          "label": null,
+          "metadata": null,
+          "name": "customer",
+          "role": null,
+          "type": "foreign"
+        },
+        {
+          "config": {
+            "meta": {}
+          },
+          "description": "",
+          "expr": "store_id",
+          "label": null,
+          "metadata": null,
+          "name": "store",
+          "role": null,
+          "type": "foreign"
+        }
+      ],
+      "label": null,
+      "measures": [],
+      "metadata": null,
+      "name": "orders",
+      "node_relation": {
+        "alias": "orders",
+        "database": "ANALYTICS",
+        "relation_name": "ANALYTICS.MARTS.orders",
+        "schema_name": "MARTS"
+      },
+      "primary_entity": null
+    },
+    {
+      "config": null,
+      "defaults": null,
+      "description": "",
+      "dimensions": [
+        {
+          "config": null,
+          "description": null,
+          "expr": "region",
+          "is_partition": false,
+          "label": null,
+          "metadata": null,
+          "name": "region",
+          "type": "categorical",
+          "type_params": null
+        },
+        {
+          "config": null,
+          "description": null,
+          "expr": "opened_at",
+          "is_partition": false,
+          "label": null,
+          "metadata": null,
+          "name": "opened_at",
+          "type": "time",
+          "type_params": {
+            "time_granularity": "day",
+            "validity_params": null
+          }
+        }
+      ],
+      "entities": [
+        {
+          "config": {
+            "meta": {}
+          },
+          "description": "",
+          "expr": "store_id",
+          "label": null,
+          "metadata": null,
+          "name": "store",
+          "role": null,
+          "type": "primary"
+        }
+      ],
+      "label": null,
+      "measures": [],
+      "metadata": null,
+      "name": "stores",
+      "node_relation": {
+        "alias": "stores",
+        "database": "ANALYTICS",
+        "relation_name": "ANALYTICS.MARTS.stores",
+        "schema_name": "MARTS"
+      },
+      "primary_entity": null
+    }
+  ]
+}
