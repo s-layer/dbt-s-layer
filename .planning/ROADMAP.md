@@ -18,7 +18,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 1: Parsing Pipeline** - Read `semantic_manifest.json` + `manifest.json`, build ref/source sentinel map
 - [x] **Phase 2: Export SQL Generation** - MetricFlow engine integration + sentinel-prefix `ref()` rewriting (HIGH RISK)
 - [x] **Phase 3: File Output + CLI** - Atomic byte-stable writer, `generate` / `check` commands, companion YAML
-- [ ] **Phase 4: Snowflake Adapter** - `sem__*.sql` via `dbt_semantic_view` package (HIGH RISK)
+- [x] **Phase 4: Snowflake Adapter** - `sem__*.sql` via `dbt_semantic_view` package (HIGH RISK)
 - [ ] **Phase 5: Pre-Commit Hook** - `.pre-commit-hooks.yaml` triggering regeneration on YAML changes
 - [ ] **Phase 6: Databricks Adapter** - `sem__*.sql` via `dbt-databricks` metric view materialisation (dbt-databricks >= 1.12.0, GA)
 - [ ] **Phase 7: DuckDB Adapter** - `sem__*.sql` via `duckdb-semantic-views` extension
@@ -98,8 +98,12 @@ Decimal phases appear between their surrounding integers in numeric order.
   2. Entities, dimensions, and measures in the generated config match the semantic YAML definitions
   3. Every upstream table reference in a generated semantic view model is expressed as `{{ ref(...) }}` or `{{ source(...) }}` so `dbt ls` and lineage tools see the correct DAG edges
   4. `dbt compile --target snowflake` succeeds on a fixture project whose generated `sem__*.sql` files are the only semantic models
-**Plans**: TBD
-**Research flag**: HIGH RISK — `/gsd-research-phase` required before planning. Must verify current Snowflake `CREATE SEMANTIC VIEW` grammar and the `dbt_semantic_view` package config schema.
+**Plans**: 4 plans
+- [x] 04-01-PLAN.md — Adapter-neutral semantic view IR and builder (join closure, element mapping, skips)
+- [x] 04-02-PLAN.md — Snowflake renderer, name shadowing check, snapshots
+- [x] 04-03-PLAN.md — `sem__` files in `generate`/`check`, clashes, warnings, package check, `doctor`
+- [x] 04-04-PLAN.md — Snowflake fixtures with `dbt_semantic_view`, compile test on both engines, README
+**Research**: done (04-RESEARCH.md). The package takes the raw `CREATE SEMANTIC VIEW` clause list, not a config schema, so criterion 2's "generated config" is the DDL body.
 
 ### Phase 5: Pre-Commit Hook
 **Goal**: Users can install one pre-commit entry that keeps their committed generated files perfectly in sync with edits to semantic YAML
@@ -155,7 +159,7 @@ Phases execute in numeric order: 0 → 1 → 2 → 3 → 4 → 5 → 6 → 7 →
 | 1. Parsing Pipeline | 4/4 | Complete | 2026-10-19 |
 | 2. Export SQL Generation | 3/3 | Complete | 2026-10-19 |
 | 3. File Output + CLI | 3/3 | Complete | 2026-10-19 |
-| 4. Snowflake Adapter | 0/TBD | Not started | - |
+| 4. Snowflake Adapter | 4/4 | Complete | 2026-10-19 |
 | 5. Pre-Commit Hook | 0/TBD | Not started | - |
 | 6. Databricks Stub Adapter | 0/TBD | Not started | - |
 | 7. DuckDB Custom Materialisation | 0/TBD | Not started | - |

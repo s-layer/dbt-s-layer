@@ -19,7 +19,7 @@ warnings through `generate` and `check`, the missing-package warning and its `do
 Snowflake fixture project with the package and an optional compile test on both engines, README.
 
 **Out of scope:** Databricks and DuckDB renderers (Phases 6 and 7 reuse the IR), the features
-listed under "Skipped" below (v2 requirements SEMVW-V2-03..08), running anything on a real
+listed under "Skipped" below (v2 requirements SEMVW-V2-03..09), running anything on a real
 Snowflake account.
 </domain>
 
@@ -77,7 +77,7 @@ Snowflake account.
 - **Skipped (one WARN each, sorted, deterministic, never an error).** Cumulative metrics,
   conversion metrics, metric filters (on the metric or its input), non-additive metrics with
   `window_groupings`, natural entities, approximate discrete percentiles, derived/ratio metrics
-  that do not qualify. Each is a v2 requirement in REQUIREMENTS.md (SEMVW-V2-03..08) so the
+  that do not qualify. Each is a v2 requirement in REQUIREMENTS.md (SEMVW-V2-03..09) so the
   deferral has a home; no TECH-DEBT entries.
 - **Name shadowing (04-RESEARCH risk 2).** Snowflake resolves a bare name to a semantic
   expression before a column. Raise `SemanticViewError` when, within one logical table, an
@@ -102,7 +102,9 @@ Snowflake account.
 - **Companion YAML.** `sem__<name>` entries: the semantic model's description, or
   `Semantic view of semantic model '<name>'.`; all entries sorted by name.
 - **Fixture.** A new project `snowflake_spec` (export_spec plus derived, ratio, percentile,
-  non-additive and skipped metrics) with a `packages.yml` that installs `dbt_semantic_view` with
+  non-additive and skipped metrics; Fusion) and its dbt Core twin `snowflake_legacy` (the same
+  on export_legacy, legacy spec: Core 1.12.6 cannot compile a new-spec semantic model that lives
+  in a package, with or without dbt-s-layer) with a `packages.yml` that installs `dbt_semantic_view` with
   the `git:` form at `v1.0.6` (hub tarballs come from codeload.github.com, which this sandbox's
   proxy refuses). Artifact sets `fusion_snowflake` and `core_snowflake` keep the package's
   materialization macro id. An integration test copies the project, runs `dbt deps`,
