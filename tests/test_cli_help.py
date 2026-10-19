@@ -99,3 +99,34 @@ def test_doctor_project_dir_end_to_end(tmp_path: Path) -> None:
     result = runner.invoke(app, ["doctor", "--project-dir", str(project)])
     # The engine check depends on this machine's PATH; the artifact check does not.
     assert "OK  artifacts: fresh (dbt Core 1.12.6)" in result.stdout
+
+
+def test_cli_works_without_metricflow(tmp_path: Path) -> None:
+    """`--help` and `doctor` still run, and doctor exits 2, when metricflow is missing."""
+    import subprocess
+    import sys
+
+    project = _copy_fixture_project(tmp_path)
+    script = (
+        "import sys\n"
+        "for name in ('metricflow', 'metricflow_semantics', 'metricflow_semantic_interfaces'):\n"
+        "    sys.modules[name] = None\n"
+        "from importlib.metadata import PackageNotFoundError\n"
+        "from dbt_s_layer import _doctor\n"
+        "def missing(name):\n"
+        "    raise PackageNotFoundError(name)\n"
+        "_doctor.version = missing\n"
+        "from dbt_s_layer.cli import app\n"
+        "app(sys.argv[1:])\n"
+    )
+    for args, code in ((["--help"], 0), (["doctor", "--project-dir", str(project)], 2)):
+        result = subprocess.run(
+            [sys.executable, "-c", script, *args],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert result.returncode == code, result.stderr
+        assert "ModuleNotFoundError" not in result.stderr
+    assert "metricflow is not installed" in result.stdout
+    assert "output directory" in result.stdout

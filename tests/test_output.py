@@ -520,3 +520,84 @@ def test_failure_while_moving_restores_the_directory(
         apply_output(changed, out)
     assert {p.name: p.read_bytes() for p in out.iterdir()} == before
     assert sorted(p.name for p in tmp_path.iterdir()) == ["core_export", "out"]
+
+
+# --- review round 2 -----------------------------------------------------------
+
+
+def _export_alias(project_dir: Path, alias: str) -> None:
+    """Give the cumulative_revenue export (no schema of its own) `alias`."""
+
+    def mutate(raw: dict[str, Any]) -> None:
+        sq = next(q for q in raw["saved_queries"] if q["name"] == "cumulative_revenue")
+        sq["exports"][0]["config"]["alias"] = alias
+
+    _semantic(project_dir, mutate)
+
+
+def _project_config(project_dir: Path, extra: str) -> None:
+    path = project_dir / "dbt_project.yml"
+    path.write_text(path.read_text() + extra)
+
+
+def test_export_alias_clashes_in_the_target_schema(make_project: MakeProject) -> None:
+    # The fixture's own `orders` model builds in the target schema.
+    project_dir = make_project("core_export")
+    _export_alias(project_dir, "orders")
+    with pytest.raises(ModelClashError, match=r"model\.fx\.orders.*alias 'orders'"):
+        _render_into(project_dir)
+
+
+@pytest.mark.parametrize(
+    "config",
+    [
+        "models:\n  fx:\n    semantic:\n      +schema: semantic\n",
+        "models:\n  fx:\n    semantic:\n      schema: semantic\n",
+        "models:\n  +schema: semantic\n  fx:\n    marts:\n      +schema: null\n",
+        "models:\n  fx:\n    +schema: other\n    semantic:\n      +schema: semantic\n",
+    ],
+)
+def test_folder_schema_moves_exports_out_of_the_target_schema(
+    config: str, make_project: MakeProject
+) -> None:
+    # Exports without a schema of their own take the output directory's `+schema`.
+    project_dir = make_project("core_export")
+    _export_alias(project_dir, "orders")
+    _project_config(project_dir, config)
+    assert list(_render_into(project_dir)) == [SCHEMA_FILE, *EXPORT_FILES]
+
+
+def test_folder_schema_clash(make_project: MakeProject) -> None:
+    project_dir = make_project("core_export")
+    _export_alias(project_dir, "orders")
+    _project_config(project_dir, "models:\n  fx:\n    semantic:\n      +schema: semantic\n")
+    _add_node(project_dir, "orders_copy", alias="ORDERS", config={"schema": "Semantic"})
+    with pytest.raises(ModelClashError, match=r"model\.fx\.orders_copy.*custom schema 'semantic'"):
+        _render_into(project_dir)
+
+
+def test_export_schema_wins_over_folder_schema(make_project: MakeProject) -> None:
+    # exp_revenue_by_day_view sets schema `reporting` itself.
+    project_dir = make_project("core_export")
+    _project_config(project_dir, "models:\n  fx:\n    semantic:\n      +schema: semantic\n")
+    _add_node(project_dir, "daily", alias="revenue_daily", config={"schema": "reporting"})
+    with pytest.raises(ModelClashError, match=r"model\.fx\.daily"):
+        _render_into(project_dir)
+
+
+def test_templated_folder_schema_is_not_guessed(make_project: MakeProject) -> None:
+    # A Jinja `+schema` cannot be resolved here; the export is not compared rather
+    # than compared against the wrong schema.
+    project_dir = make_project("core_export")
+    _export_alias(project_dir, "orders")
+    _project_config(
+        project_dir, "models:\n  fx:\n    semantic:\n      +schema: \"{{ var('s') }}\"\n"
+    )
+    assert list(_render_into(project_dir)) == [SCHEMA_FILE, *EXPORT_FILES]
+
+
+def test_ephemeral_models_build_no_relation(make_project: MakeProject) -> None:
+    project_dir = make_project("core_export")
+    _export_alias(project_dir, "staged")
+    _add_node(project_dir, "staged", config={"materialized": "ephemeral"})
+    assert list(_render_into(project_dir)) == [SCHEMA_FILE, *EXPORT_FILES]
