@@ -770,6 +770,27 @@ def test_export_on_a_semantic_view_relation(make_project: MakeProject) -> None:
         _render_snowflake_into(project_dir)
 
 
+def test_export_on_a_semantic_view_relation_in_a_templated_folder_schema(
+    make_project: MakeProject,
+) -> None:
+    # Review round 1: the folder `+schema` is unknown, but the export (no schema of its
+    # own) and the semantic view both take it, so they still clash.
+    project_dir = make_project("core_export")
+    _export_alias(project_dir, "SEM__ORDERS")
+    _project_config(
+        project_dir, "models:\n  fx:\n    semantic:\n      +schema: \"{{ var('s') }}\"\n"
+    )
+    with pytest.raises(
+        ModelClashError,
+        match=(
+            r"export 'exp_cumulative' of saved query 'cumulative_revenue' and semantic view "
+            r"of semantic model 'orders' would both build alias 'sem__orders' in the output "
+            r"directory's schema\."
+        ),
+    ):
+        _render_snowflake_into(project_dir)
+
+
 def test_earlier_semantic_views_do_not_clash(make_project: MakeProject) -> None:
     project_dir = make_project("core_export")
     for name in SEM_FILES["fusion_export"]:
