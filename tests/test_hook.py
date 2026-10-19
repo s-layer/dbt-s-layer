@@ -439,7 +439,8 @@ def test_a_legacy_project_without_dbt_core_is_an_error(
     result = _hook(SEMANTIC_FILE)
     assert result.exit_code == 1, result.output
     assert fake_dbt.calls() == []
-    assert "core_export/models/marts/orders.yml" in result.output
+    # Names a file that declares one (the first in path order), and the way out.
+    assert "core_export/models/marts/customers.yml declares a legacy-spec" in result.output
     assert "dbt Core" in result.output
     assert "--dbt" in result.output
     assert not (project / OUTPUT).exists()

@@ -13,6 +13,9 @@ import copy
 import multiprocessing
 import os
 import re
+import threading
+from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures.process import BrokenProcessPool
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
@@ -330,14 +333,30 @@ def worker_count(saved_queries: int) -> int:
 def _explain_all(
     shared: _SharedEngine, saved_queries: Sequence[str], jobs: int
 ) -> list[_Explained]:
-    """Explain each saved query, in order; in a forked process pool when `jobs` > 1."""
-    if jobs <= 1 or len(saved_queries) <= 1 or not _can_fork():
+    """
+    Explain each saved query, in order; in forked processes when `jobs` > 1.
+
+    Stays in this process when another thread is running: a forked child gets a
+    copy of every lock, and one another thread held stays locked in it for good.
+    A worker that dies (killed when out of memory, say) is an ExportRenderError.
+    """
+    if jobs <= 1 or len(saved_queries) <= 1 or not _can_fork() or threading.active_count() > 1:
         return [_explain(shared, name) for name in saved_queries]
     global _worker_engine
     _worker_engine = shared
     try:
-        with multiprocessing.get_context("fork").Pool(min(jobs, len(saved_queries))) as pool:
-            return pool.map(_explain_in_worker, saved_queries, chunksize=1)
+        # With `fork`, the executor starts every worker before its own manager thread.
+        with ProcessPoolExecutor(
+            max_workers=min(jobs, len(saved_queries)),
+            mp_context=multiprocessing.get_context("fork"),
+        ) as pool:
+            return list(pool.map(_explain_in_worker, saved_queries))
+    except BrokenProcessPool as exc:
+        raise ExportRenderError(
+            "a process explaining saved queries ended unexpectedly (killed, out of memory, "
+            f"or crashed), so no export was rendered. Set {JOBS_ENV}=1 to explain them in "
+            "one process."
+        ) from exc
     finally:
         _worker_engine = None
 

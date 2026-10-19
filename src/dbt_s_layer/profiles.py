@@ -10,8 +10,8 @@ import os
 from pathlib import Path
 from typing import cast
 
+from dbt_s_layer._project_yaml import read_dbt_project
 from dbt_s_layer._yaml import YamlReadError, read_yaml
-from dbt_s_layer.artifacts import read_dbt_project
 from dbt_s_layer.errors import ProfileError
 
 PROFILES_FILE = "profiles.yml"

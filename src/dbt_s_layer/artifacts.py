@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import json
 import os
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, cast
 
 from metricflow_semantic_interfaces.implementations.semantic_manifest import (
     PydanticSemanticManifest,
@@ -28,7 +28,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from pydantic import ValidationError as PydanticV2ValidationError
 from pydantic.v1 import ValidationError as PydanticV1ValidationError
 
-from dbt_s_layer._yaml import YamlReadError, read_yaml
+from dbt_s_layer._project_yaml import read_dbt_project
 from dbt_s_layer.errors import ArtifactInvalidError, ArtifactNotFoundError, ProjectNotFoundError
 
 if TYPE_CHECKING:
@@ -43,20 +43,6 @@ _MAX_REPORTED_ISSUES = 5
 
 
 # --- target directory -------------------------------------------------------
-
-
-def read_dbt_project(project_dir: Path) -> dict[str, Any]:
-    """Return the parsed dbt_project.yml of `project_dir`."""
-    path = project_dir / "dbt_project.yml"
-    if not path.is_file():
-        raise ProjectNotFoundError(f"{project_dir} is not a dbt project: {path} does not exist.")
-    try:
-        data = read_yaml(path)
-    except YamlReadError as exc:
-        raise ProjectNotFoundError(f"{path} could not be read: {exc}") from exc
-    if not isinstance(data, dict):
-        raise ProjectNotFoundError(f"{path} could not be read: it is not a YAML mapping.")
-    return {str(k): v for k, v in cast("dict[object, object]", data).items()}
 
 
 def resolve_target_dir(project_dir: Path) -> Path:

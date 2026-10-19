@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from dbt_s_layer._paths import resolve_output_dir
-from dbt_s_layer.errors import DbtSLayerError
+from dbt_s_layer.errors import ArtifactIncompleteError, DbtSLayerError
 from dbt_s_layer.output import apply_output, diff_output, project_model_paths, render_output
 from dbt_s_layer.profiles import adapter_for_target
 from dbt_s_layer.staleness import check_artifacts
@@ -33,6 +33,9 @@ class Options:
     target: str | None = None
     adapter: str | None = None
     profiles_dir: Path | None = None
+    # Refuse to write when semantic_manifest.json lacks a declared semantic model,
+    # instead of warning: the pre-commit hook would otherwise remove its files.
+    missing_is_error: bool = False
 
 
 def _out(message: str) -> None:
@@ -45,8 +48,15 @@ def _err(message: str) -> None:
 
 def _render(options: Options) -> tuple[RenderedOutput, Path]:
     checked = check_artifacts(options.project_dir)
+    refused = checked.missing if options.missing_is_error else ()
     for warning in checked.warnings:
-        _err(f"WARN {warning}")
+        if warning not in refused:
+            _err(f"WARN {warning}")
+    if refused:
+        raise ArtifactIncompleteError(
+            "; ".join(refused) + ". Nothing was written, so no generated file is removed "
+            "for it; parse the project with an engine that reads it."
+        )
     project = checked.project
     output_dir = resolve_output_dir(project.project_dir, options.output_dir)
     model_paths = project_model_paths(project.project_dir)
