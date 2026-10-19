@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from dbt_s_layer._paths import resolve_output_dir
-from dbt_s_layer.errors import DbtSLayerError
+from dbt_s_layer.errors import ArtifactIncompleteError, DbtSLayerError
 from dbt_s_layer.output import apply_output, diff_output, project_model_paths, render_output
 from dbt_s_layer.profiles import adapter_for_target
 from dbt_s_layer.staleness import check_artifacts
@@ -33,6 +33,10 @@ class Options:
     target: str | None = None
     adapter: str | None = None
     profiles_dir: Path | None = None
+    # Refuse to write when the engine that wrote semantic_manifest.json left out a
+    # declared semantic model, instead of warning: the pre-commit hook would
+    # otherwise remove its files.
+    missing_is_error: bool = False
 
 
 def _out(message: str) -> None:
@@ -45,8 +49,15 @@ def _err(message: str) -> None:
 
 def _render(options: Options) -> tuple[RenderedOutput, Path]:
     checked = check_artifacts(options.project_dir)
+    refused = checked.dropped if options.missing_is_error else ()
     for warning in checked.warnings:
-        _err(f"WARN {warning}")
+        if warning not in refused:
+            _err(f"WARN {warning}")
+    if refused:
+        raise ArtifactIncompleteError(
+            "; ".join(refused) + ". Nothing was written, so no generated file is removed "
+            "for it; parse the project with an engine that reads it."
+        )
     project = checked.project
     output_dir = resolve_output_dir(project.project_dir, options.output_dir)
     model_paths = project_model_paths(project.project_dir)
@@ -84,22 +95,31 @@ def _summary(diff: OutputDiff) -> str:
     return ", ".join(parts)
 
 
-def run_generate(options: Options) -> int:
-    """Write the generated files; return the exit code."""
+def generate_project(options: Options) -> tuple[Path, OutputDiff] | None:
+    """
+    Write the generated files and print the summary line.
+
+    Return the output directory and what changed, or None after printing an error.
+    """
     try:
         files, output_dir = _render(options)
         diff = apply_output(files, output_dir)
     except DbtSLayerError as exc:
         _err(f"ERROR: {exc}")
-        return 1
+        return None
     except OSError as exc:
         _err(f"ERROR: could not write to the output directory: {exc}")
-        return 1
+        return None
     if diff.clean:
         _out(f"{output_dir} is up to date ({_count(len(files))}).")
     else:
         _out(f"Generated {_count(len(files))} in {output_dir} ({_summary(diff)}).")
-    return 0
+    return output_dir, diff
+
+
+def run_generate(options: Options) -> int:
+    """Write the generated files; return the exit code."""
+    return 1 if generate_project(options) is None else 0
 
 
 def run_check(options: Options) -> int:

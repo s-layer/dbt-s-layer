@@ -45,8 +45,8 @@
 
 ### Pre-commit Hook
 
-- [ ] **HOOK-01**: Package ships a `.pre-commit-hooks.yaml` defining a `dbt-s-layer` hook that runs `dbt-s-layer generate` on changes to files containing `semantic_models:`, `metrics:`, or `saved_queries:` YAML keys
-- [ ] **HOOK-02**: Pre-commit hook completes within 5 seconds on a project with up to 100 semantic models and 50 exports
+- [x] **HOOK-01**: Package ships a `.pre-commit-hooks.yaml` defining a `dbt-s-layer` hook that runs `dbt-s-layer generate` on changes to files containing `semantic_models:`, `metrics:`, or `saved_queries:` YAML keys
+- [x] **HOOK-02**: Pre-commit hook completes within 5 seconds with dbt Fusion on a project with up to 100 semantic models and 50 exports; with dbt Core the hook is bounded by Core's own `dbt parse` time (documented in README)
 
 ## v2 Requirements
 
@@ -115,8 +115,8 @@ Semantic model features v1 leaves out of semantic views (each is skipped with a 
 | CLI-03 | Phase 0 | Complete (output directory check in Phase 3) |
 | CLI-04 | Phase 3 | Complete |
 | CLI-05 | Phase 1 | Complete (`check_artifacts`; Phase 3 `generate`/`check` must call it) |
-| HOOK-01 | Phase 5 | Pending |
-| HOOK-02 | Phase 5 | Pending |
+| HOOK-01 | Phase 5 | Complete |
+| HOOK-02 | Phase 5 | Complete |
 
 **Coverage:**
 - v1 requirements: 25 total

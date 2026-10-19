@@ -28,6 +28,10 @@ class StaleArtifactError(DbtSLayerError):
     """semantic_manifest.json is older than the semantic YAML it was parsed from."""
 
 
+class ArtifactIncompleteError(DbtSLayerError):
+    """semantic_manifest.json lacks a semantic model the project's YAML declares."""
+
+
 class RefResolutionError(DbtSLayerError):
     """A semantic model cannot be mapped to exactly one dbt model node."""
 

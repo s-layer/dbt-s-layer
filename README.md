@@ -155,6 +155,44 @@ Each of these is skipped with one warning naming it; the rest of the view is sti
 | Ratio and derived metrics with an offset, a filter, or inputs from another semantic model or another derived metric | Only metrics of the same view can be combined without changing their meaning. |
 | `fill_nulls_with`, `join_to_timespine` | Ignored (with a warning); the metric is generated without them. |
 
+## Pre-commit hook
+
+The `dbt-s-layer` hook regenerates the models when you commit a change to your semantic YAML, so the generated files never fall behind. Add it to your repository's `.pre-commit-config.yaml`:
+
+```yaml
+repos:
+  - repo: https://github.com/s-layer/dbt-s-layer
+    rev: develop  # no release tag yet: pin a commit SHA, and run `pre-commit autoupdate` once tags exist
+    hooks:
+      - id: dbt-s-layer
+```
+
+Then `pre-commit install` (or `prek install`). On a commit that stages semantic YAML, the hook:
+
+1. finds the dbt project of each staged file: the nearest `dbt_project.yml`, unless a project above it lists that directory as a `local:` package in `packages.yml` or `dependencies.yml`, in which case the installing project (a project in a subdirectory works, and a package that names no `profile` belongs to the nearest project above it that does),
+2. runs `dbt parse` in it. A project that declares legacy-spec `semantic_models:` (itself, or in a package it installs) is parsed with dbt Core, since Fusion ignores them; the hook stops with an error if `dbtf`/`dbt` on `PATH` offers no dbt Core >= 1.7. Any other project is parsed with `dbtf` if it is on `PATH`, else `dbt`. `--dbt` overrides both,
+3. runs `dbt-s-layer generate`. If `semantic_manifest.json` lacks a semantic model your YAML declares (a parse with the wrong engine), the hook fails without writing or deleting anything,
+4. fails the commit if it wrote, changed or deleted anything, and lists the files. Stage them (`git add`) and commit again; the second run changes nothing and passes.
+
+Only files that hold a `semantic_models:`, `semantic_model:`, `metrics:`, `saved_queries:` or `time_spine:` key, a `dbt_project.yml`, or a generated file trigger it. A commit without any of them skips the hook in a fraction of a second. A hand edit to a generated file is put back. Deleting a semantic YAML file does not trigger the hook (pre-commit only passes files that exist), so keep `dbt-s-layer check` in CI as well.
+
+`dbt parse` needs a profile, as it always does. The hook passes `generate`'s options through `args`, and has two of its own:
+
+```yaml
+      - id: dbt-s-layer
+        args: [--target, dev, --profiles-dir, analytics/profiles, --dbt, .venv/bin/dbt]
+```
+
+| Option | |
+|---|---|
+| `--dbt` | The executable that parses, for example a dbt Core in a virtualenv that is not activated. Paths are relative to the repository root. |
+| `--no-parse` | Don't run `dbt parse`: something else parses first (another hook). `generate` still refuses artifacts older than the YAML. |
+| `--project-dir`, `--output-dir`, `--target`, `--adapter`, `--profiles-dir` | As for `generate`. `--target` goes to `dbt parse` too. The hook finds `profiles.yml` once (`--profiles-dir`, else `DBT_PROFILES_DIR`, the repository root, the project, `~/.dbt`) and passes that directory to `dbt parse` as `--profiles-dir`, so both read the same file. |
+
+pre-commit installs dbt-s-layer in its own environment, so it never touches the dbt you run. Your dbt engine still has to be on `PATH` (or named with `--dbt`).
+
+**Speed.** On a project with 100 semantic models and 50 exports (`scripts/make_scale_project.py`), on a 4-core Linux machine, the hook takes 4.0 to 4.4 s after a YAML edit with dbt Fusion 2.0.8, whose `dbt parse` takes 0.7 s. dbt Core's own `dbt parse` takes 5.4 to 6.6 s on the same project (more than half of it is dbt's start-up), so with dbt Core the hook takes 10 to 12 s. Saved queries are rendered in parallel on Linux and macOS (in forked processes, and only while dbt-s-layer runs a single thread); set `DBT_S_LAYER_JOBS=1` to use one process. If a worker process dies (out of memory, say), the run fails with an error that suggests that setting.
+
 ## License
 
 Apache-2.0. See [LICENSE](./LICENSE).

@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, cast
 
 from ruamel.yaml import YAML
 
-from dbt_s_layer.artifacts import read_dbt_project
+from dbt_s_layer._project_yaml import read_dbt_project
 from dbt_s_layer.errors import ModelClashError, OutputConflictError
 from dbt_s_layer.exports import render_exports
 from dbt_s_layer.semantic_views import render_semantic_views

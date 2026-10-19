@@ -19,7 +19,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 2: Export SQL Generation** - MetricFlow engine integration + sentinel-prefix `ref()` rewriting (HIGH RISK)
 - [x] **Phase 3: File Output + CLI** - Atomic byte-stable writer, `generate` / `check` commands, companion YAML
 - [x] **Phase 4: Snowflake Adapter** - `sem__*.sql` via `dbt_semantic_view` package (HIGH RISK)
-- [ ] **Phase 5: Pre-Commit Hook** - `.pre-commit-hooks.yaml` triggering regeneration on YAML changes
+- [x] **Phase 5: Pre-Commit Hook** - `.pre-commit-hooks.yaml` triggering regeneration on YAML changes
 - [ ] **Phase 6: Databricks Adapter** - `sem__*.sql` via `dbt-databricks` metric view materialisation (dbt-databricks >= 1.12.0, GA)
 - [ ] **Phase 7: DuckDB Adapter** - `sem__*.sql` via `duckdb-semantic-views` extension
 - [ ] **Phase 8: v1 Release Hardening** - Docs, versioning, publish pipeline, final verification
@@ -111,9 +111,13 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Requirements**: HOOK-01, HOOK-02
 **Success Criteria** (what must be TRUE):
   1. A project that adds the `dbt-s-layer` hook to `.pre-commit-config.yaml` automatically regenerates files when any YAML containing `semantic_models:`, `metrics:`, or `saved_queries:` keys is modified
-  2. The hook completes in under 5 seconds on a fixture project with 100 semantic models and 50 exports
+  2. The hook completes within 5 seconds with dbt Fusion on a project with up to 100 semantic models and 50 exports; with dbt Core the hook is bounded by Core's own `dbt parse` time (documented in README)
   3. The hook is deterministic: running it twice in a row makes no further changes (exits clean)
-**Plans**: TBD
+**Plans**: 3 plans
+- [x] 05-01-PLAN.md — Export rendering speed: one engine set-up, fresh planner per saved query, process pool
+- [x] 05-02-PLAN.md — `dbt-s-layer pre-commit`: relevant files, project discovery, `dbt parse`, generate, exit codes
+- [x] 05-03-PLAN.md — `.pre-commit-hooks.yaml`, scale test, README, end to end with pre-commit and prek
+**Research**: done (05-RESEARCH.md). The hook parses (Fusion or dbt Core) and then generates. Criterion 2 holds with Fusion (4.0 to 4.3 s); dbt Core's own parse takes 5.4 s or more on the 100/50 project, so with Core the hook takes 10 to 12 s.
 
 ### Phase 6: Databricks Adapter
 **Goal**: Every `semantic_model` produces a `sem__*.sql` model that materialises as a Databricks metric view via the `dbt-databricks` package (`dbt-databricks >= 1.12.0` (GA), databricks/dbt-databricks#1285), with correct DAG edges
@@ -160,7 +164,7 @@ Phases execute in numeric order: 0 → 1 → 2 → 3 → 4 → 5 → 6 → 7 →
 | 2. Export SQL Generation | 3/3 | Complete | 2026-10-19 |
 | 3. File Output + CLI | 3/3 | Complete | 2026-10-19 |
 | 4. Snowflake Adapter | 4/4 | Complete | 2026-10-19 |
-| 5. Pre-Commit Hook | 0/TBD | Not started | - |
+| 5. Pre-Commit Hook | 3/3 | Complete | 2026-10-19 |
 | 6. Databricks Stub Adapter | 0/TBD | Not started | - |
 | 7. DuckDB Custom Materialisation | 0/TBD | Not started | - |
 | 8. v1 Release Hardening | 0/TBD | Not started | - |

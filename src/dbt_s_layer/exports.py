@@ -9,11 +9,20 @@ Phase 3 writes them to disk.
 
 from __future__ import annotations
 
+import copy
+import multiprocessing
+import os
 import re
+import threading
+from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures.process import BrokenProcessPool
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
+from metricflow.dataflow.builder.builder_cache import DataflowPlanBuilderCache
+from metricflow.dataflow.builder.dataflow_plan_builder import DataflowPlanBuilder
 from metricflow.engine.metricflow_engine import MetricFlowEngine, MetricFlowQueryRequest
+from metricflow.plan_conversion.to_sql_plan.dataflow_to_sql import DataflowToSqlPlanConverter
 from metricflow.protocols.sql_client import SqlEngine
 from metricflow.sql.render.athena import AthenaSqlPlanRenderer
 from metricflow.sql.render.big_query import BigQuerySqlPlanRenderer
@@ -31,6 +40,8 @@ from dbt_s_layer.quoting import quoting_renderer
 from dbt_s_layer.sentinels import build_sentinel_table, postflight, rewrite
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from metricflow.data_table.mf_table import MetricFlowDataTable
     from metricflow.sql.render.sql_plan_renderer import DefaultSqlPlanRenderer, SqlPlanRenderer
     from metricflow_semantic_interfaces.implementations.export import PydanticExport
@@ -59,6 +70,11 @@ _DIALECTS: dict[str, tuple[SqlEngine, type[DefaultSqlPlanRenderer]]] = {
     "trino": (SqlEngine.TRINO, TrinoSqlPlanRenderer),
 }
 SUPPORTED_ADAPTERS = tuple(_DIALECTS)
+
+# Explaining saved queries in a process pool (05-RESEARCH finding 4).
+JOBS_ENV = "DBT_S_LAYER_JOBS"
+_PARALLEL_MIN_SAVED_QUERIES = 8
+_MAX_JOBS = 8
 
 
 @dataclass(frozen=True)
@@ -220,15 +236,143 @@ def _export_model(
     )
 
 
+class _SharedEngine:
+    """
+    One `MetricFlowEngine` set-up that hands out an engine with a fresh planner per query.
+
+    The set-up (source data sets and source nodes for every semantic model) is the
+    expensive part and no query changes it. The planner's caches are what make an
+    engine render a query it has planned before with different aliases (02-RESEARCH
+    finding 1), so each query gets new ones (05-RESEARCH finding 3). Uses private
+    attributes of the pinned metricflow, guarded by tests/test_stack_surface.py.
+    """
+
+    def __init__(self, lookup: SemanticManifestLookup, client: _RenderOnlySqlClient) -> None:
+        self._base = MetricFlowEngine(lookup, client)
+
+    def engine(self) -> MetricFlowEngine:
+        base = self._base
+        builder = base._dataflow_plan_builder
+        engine = copy.copy(base)
+        engine._dataflow_plan_builder_cache = DataflowPlanBuilderCache()
+        engine._dataflow_plan_builder = DataflowPlanBuilder(
+            source_node_set=builder._source_node_set,
+            semantic_manifest_lookup=base._semantic_manifest_lookup,
+            column_association_resolver=base._column_association_resolver,
+            # The base engine never plans a query, so this holds the source nodes only.
+            node_output_resolver=builder._node_data_set_resolver.copy(),
+            source_node_builder=builder._source_node_builder,
+            dataflow_plan_builder_cache=engine._dataflow_plan_builder_cache,
+        )
+        engine._to_sql_plan_converter = DataflowToSqlPlanConverter(
+            column_association_resolver=base._column_association_resolver,
+            semantic_manifest_lookup=base._semantic_manifest_lookup,
+        )
+        return engine
+
+
+@dataclass(frozen=True)
+class _Explained:
+    """metricflow's SQL for one saved query, or why there is none."""
+
+    sql: str | None
+    error: str | None
+
+
+def _explain(shared: _SharedEngine, saved_query: str) -> _Explained:
+    context = f"saved query {saved_query!r}"
+    request = MetricFlowQueryRequest.create(saved_query_name=saved_query)
+    try:
+        statement = shared.engine().explain(request).sql_statement
+    except (MetricFlowException, NotImplementedError) as exc:
+        return _Explained(None, f"{context}: metricflow could not render it: {_one_line(exc)}")
+    if statement.bind_parameter_set.param_items:
+        return _Explained(
+            None,
+            f"{context}: metricflow rendered SQL with bind parameters, which a dbt "
+            "model cannot carry.",
+        )
+    return _Explained(statement.sql, None)
+
+
+# Set in the parent before forking, so workers inherit the set-up instead of pickling it.
+_worker_engine: _SharedEngine | None = None
+
+
+def _explain_in_worker(saved_query: str) -> _Explained:
+    assert _worker_engine is not None
+    return _explain(_worker_engine, saved_query)
+
+
+def _can_fork() -> bool:
+    return "fork" in multiprocessing.get_all_start_methods()
+
+
+def worker_count(saved_queries: int) -> int:
+    """
+    How many processes explain `saved_queries` saved queries.
+
+    `DBT_S_LAYER_JOBS` (a positive integer) sets it; otherwise one per CPU, at most
+    8, when there are at least 8 saved queries. Always 1 without the `fork` start
+    method (Windows), since a worker must inherit the engine set-up.
+    """
+    raw = os.environ.get(JOBS_ENV, "")
+    if raw:
+        requested = int(raw) if raw.isdigit() else 0
+        if requested < 1:
+            raise ExportRenderError(f"{JOBS_ENV} must be a positive integer, not {raw!r}.")
+    elif saved_queries < _PARALLEL_MIN_SAVED_QUERIES:
+        return 1
+    else:
+        requested = min(os.cpu_count() or 1, _MAX_JOBS)
+    if not _can_fork():
+        return 1
+    return max(1, min(requested, saved_queries))
+
+
+def _explain_all(
+    shared: _SharedEngine, saved_queries: Sequence[str], jobs: int
+) -> list[_Explained]:
+    """
+    Explain each saved query, in order; in forked processes when `jobs` > 1.
+
+    Stays in this process when another thread is running: a forked child gets a
+    copy of every lock, and one another thread held stays locked in it for good.
+    A worker that dies (killed when out of memory, say) is an ExportRenderError.
+    """
+    if jobs <= 1 or len(saved_queries) <= 1 or not _can_fork() or threading.active_count() > 1:
+        return [_explain(shared, name) for name in saved_queries]
+    global _worker_engine
+    _worker_engine = shared
+    try:
+        # With `fork`, the executor starts every worker before its own manager thread.
+        with ProcessPoolExecutor(
+            max_workers=min(jobs, len(saved_queries)),
+            mp_context=multiprocessing.get_context("fork"),
+        ) as pool:
+            return list(pool.map(_explain_in_worker, saved_queries))
+    except BrokenProcessPool as exc:
+        raise ExportRenderError(
+            "a process explaining saved queries ended unexpectedly (killed, out of memory, "
+            f"or crashed), so no export was rendered. Set {JOBS_ENV}=1 to explain them in "
+            "one process."
+        ) from exc
+    finally:
+        _worker_engine = None
+
+
 def render_exports(
-    project: SemanticProject, *, adapter: str | None = None
+    project: SemanticProject, *, adapter: str | None = None, jobs: int | None = None
 ) -> tuple[ExportModel, ...]:
     """
     Render every saved-query export in the project, sorted by file name.
 
     `adapter` overrides manifest.json `metadata.adapter_type`, which picks the
-    SQL dialect.
+    SQL dialect. `jobs` is the number of processes that explain saved queries
+    (default: `worker_count`); the output does not depend on it.
     """
+    if jobs is not None and jobs < 1:
+        raise ValueError(f"jobs must be at least 1, not {jobs}")
     adapter = adapter or project.dbt_manifest.metadata.adapter_type
     if adapter is None:
         raise ExportRenderError(
@@ -244,33 +388,27 @@ def render_exports(
             f"metricflow could not load the manifest: {_one_line(exc)}"
         ) from exc
 
+    saved_queries = sorted(
+        (sq for sq in table.manifest.saved_queries if sq.exports), key=lambda sq: sq.name
+    )
+    explained: list[_Explained] = []
+    if saved_queries:
+        names = [sq.name for sq in saved_queries]
+        jobs = jobs if jobs is not None else worker_count(len(names))
+        explained = _explain_all(_SharedEngine(lookup, client), names, jobs)
+
     models: dict[str, ExportModel] = {}
     # (schema, alias) -> model. dbt refuses two models on one relation, but
     # compares case-sensitively; Snowflake, DuckDB and Databricks fold unquoted
     # names, so different case still builds one table (03-RESEARCH finding 2).
     relations: dict[tuple[str | None, str], ExportModel] = {}
-    for saved_query in sorted(table.manifest.saved_queries, key=lambda sq: sq.name):
-        if not saved_query.exports:
-            continue
+    for saved_query, result in zip(saved_queries, explained, strict=True):
         context = f"saved query {saved_query.name!r}"
         dbt_sq = _dbt_saved_query(project, saved_query.name)
-        # A fresh engine per saved query: an engine caches plans and renders a
-        # query it has seen before with different aliases (02-RESEARCH.md, finding 1).
-        engine = MetricFlowEngine(lookup, client)
-        try:
-            statement = engine.explain(
-                MetricFlowQueryRequest.create(saved_query_name=saved_query.name)
-            ).sql_statement
-        except (MetricFlowException, NotImplementedError) as exc:
-            raise ExportRenderError(
-                f"{context}: metricflow could not render it: {_one_line(exc)}"
-            ) from exc
-        if statement.bind_parameter_set.param_items:
-            raise ExportRenderError(
-                f"{context}: metricflow rendered SQL with bind parameters, which a dbt "
-                "model cannot carry."
-            )
-        sql = rewrite(statement.sql, table, context=context)
+        if result.error is not None:
+            raise ExportRenderError(result.error)
+        assert result.sql is not None
+        sql = rewrite(result.sql, table, context=context)
         for export in saved_query.exports:
             model = _export_model(saved_query, export, dbt_sq, sql)
             other = models.get(model.file_name)
