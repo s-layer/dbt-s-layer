@@ -11,7 +11,7 @@ import pytest
 from ruamel.yaml import YAML
 
 from dbt_s_layer import output
-from dbt_s_layer.errors import OutputConflictError
+from dbt_s_layer.errors import ModelClashError, OutputConflictError
 from dbt_s_layer.output import (
     SCHEMA_FILE,
     OutputDiff,
@@ -357,3 +357,111 @@ def test_output_dir_that_is_a_file(make_project: MakeProject, tmp_path: Path) ->
         apply_output(files, out)
     with pytest.raises(OutputConflictError, match="not a directory"):
         diff_output(files, out)
+
+
+# --- clashes with the user's own models ---------------------------------------
+
+
+def _add_node(project_dir: Path, name: str, **fields: Any) -> None:
+    """Add a model node to manifest.json, as `dbt parse` would for a user model."""
+    path = project_dir / "target" / "manifest.json"
+    raw: dict[str, Any] = json.loads(path.read_text())
+    package = fields.pop("package_name", "fx")
+    config = {"schema": None, "database": None, **fields.pop("config", {})}
+    raw["nodes"][f"model.{package}.{name}"] = {
+        "resource_type": fields.pop("resource_type", "model"),
+        "unique_id": f"model.{package}.{name}",
+        "name": name,
+        "package_name": package,
+        "database": "memory",
+        "schema": "marts",
+        "alias": name,
+        "original_file_path": f"models/{name}.sql",
+        "config": config,
+        **fields,
+    }
+    path.write_text(json.dumps(raw))
+
+
+def _render_into(project_dir: Path) -> dict[str, str]:
+    return render_output(load_project(project_dir), output_dir=project_dir / "models" / "semantic")
+
+
+@pytest.mark.parametrize("resource_type", ["model", "seed", "snapshot"])
+def test_user_model_with_a_generated_name(resource_type: str, make_project: MakeProject) -> None:
+    project_dir = make_project("core_export")
+    _add_node(
+        project_dir,
+        "exp__cumulative_revenue__exp_cumulative",
+        alias="something_else",
+        resource_type=resource_type,
+    )
+    with pytest.raises(
+        ModelClashError,
+        match=r"exp__cumulative_revenue__exp_cumulative.*models/exp__cumulative_revenue__exp_cumulative\.sql",
+    ):
+        _render_into(project_dir)
+
+
+def test_earlier_generated_models_do_not_clash(make_project: MakeProject) -> None:
+    # After `generate` and `dbt parse`, the generated models are in manifest.json too.
+    project_dir = make_project("core_export")
+    for name in EXPORT_FILES:
+        stem = name.removesuffix(".sql")
+        _add_node(project_dir, stem, original_file_path=f"models/semantic/{name}")
+    view = "exp__revenue_by_day__exp_revenue_by_day_view"
+    _add_node(
+        project_dir,
+        view,
+        alias="revenue_daily",
+        original_file_path=f"models/semantic/{view}.sql",
+        config={"schema": "reporting"},
+    )
+    assert list(_render_into(project_dir)) == [SCHEMA_FILE, *EXPORT_FILES]
+
+
+@pytest.mark.parametrize(
+    ("alias", "schema"),
+    [("revenue_daily", "reporting"), ("REVENUE_DAILY", "Reporting")],
+)
+def test_user_model_on_an_export_relation(
+    alias: str, schema: str, make_project: MakeProject
+) -> None:
+    # dbt itself only catches the exact-case clash (03-RESEARCH finding 2).
+    project_dir = make_project("core_export")
+    _add_node(project_dir, "daily_revenue", alias=alias, config={"schema": schema})
+    with pytest.raises(
+        ModelClashError,
+        match=r"exp_revenue_by_day_view.*revenue_by_day.*model\.fx\.daily_revenue.*alias 'revenue_daily'",
+    ):
+        _render_into(project_dir)
+
+
+def test_user_model_in_the_target_schema(make_project: MakeProject) -> None:
+    project_dir = make_project("core_export")
+    _add_node(project_dir, "exp_cumulative", package_name="fx_dep")
+    with pytest.raises(ModelClashError, match=r"model\.fx_dep\.exp_cumulative.*target schema"):
+        _render_into(project_dir)
+
+
+@pytest.mark.parametrize(
+    "fields",
+    [
+        # Different custom schema.
+        {"alias": "revenue_daily", "config": {"schema": "other"}},
+        # A database of its own: exports cannot set one.
+        {"alias": "revenue_daily", "config": {"schema": "reporting", "database": "elsewhere"}},
+        # Same alias, but in the target schema rather than `reporting`.
+        {"alias": "revenue_daily"},
+        # A snapshot's `target_schema` is used as is, not through generate_schema_name.
+        {
+            "alias": "exp_cumulative",
+            "resource_type": "snapshot",
+            "config": {"target_schema": "snapshots"},
+        },
+    ],
+)
+def test_different_relations_do_not_clash(fields: dict[str, Any], make_project: MakeProject) -> None:
+    project_dir = make_project("core_export")
+    _add_node(project_dir, "user_model", **fields)
+    assert list(_render_into(project_dir)) == [SCHEMA_FILE, *EXPORT_FILES]
