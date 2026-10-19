@@ -24,9 +24,26 @@ The compiled `sem__*.sql` hold physical relations (`orders AS ANALYTICS.MARTS.or
 same run is automated in tests/test_snowflake_compile.py (2 passed locally with both engines;
 skipped in CI, which installs no engine).
 
-Fusion's compile prints one dbt0101 static-analysis warning, for the export
+Fusion's compile printed one dbt0101 static-analysis warning, for the export
 `exp__items_by_country__exp_items_by_country` (metricflow's join subquery), not for a semantic
-view: the `sem__` models set `static_analysis='off'`. Recorded in STATE.md.
+view: the `sem__` models set `static_analysis='off'`. Review round 2 found the cause: the
+unquoted entity `order` (see below); Fusion now compiles with no dbt0101.
+
+## Review round 2 / Snowflake smoke run
+
+- On a real Snowflake account, `exp__items_by_country__exp_items_by_country` failed: `001003
+  (42000): SQL compilation error: syntax error line 24 at position 33 unexpected 'order'`.
+  metricflow rendered the entity `order` unquoted (`... AS order`, `subq_10.order`;
+  dbt-labs/metricflow#2058). Exports now quote column names that are reserved words in the
+  target dialect (04-04-SUMMARY.md). After the fix, on fresh copies:
+  - snowflake_legacy, dbt Core 1.12.6 + dbt-snowflake 1.12.3: `dbt parse`, `generate`,
+    `dbt parse`, `dbt compile --no-populate-cache --target snowflake` all exit 0; the compiled
+    export has `orders_src_10000.order_id AS "ORDER"` and `= subq_10."ORDER"`.
+  - snowflake_spec, Fusion 2.0.8: parse, `generate`, parse, `compile --target snowflake` exit 0,
+    with no dbt0101 warning (`AS "ORDER"`, `= subq_11."ORDER"`).
+  - tests/test_snowflake_compile.py with both engines: 2 passed.
+- A semantic view skipped for a `SemanticViewError` no longer prints the closure warnings it
+  raised while being built (04-03-SUMMARY.md).
 
 ## Not verified
 
@@ -55,6 +72,6 @@ requirements SEMVW-V2-03..09.
 
 ## Gates
 
-- `uv run pytest`: 569 passed, 2 skipped (the compile test, without engines on PATH)
+- `uv run pytest`: 641 passed, 2 skipped (the compile test, without engines on PATH)
 - With `DBT_S_LAYER_FUSION` / `DBT_S_LAYER_CORE` set: the 2 compile tests pass
 - `prek run --all-files`: clean

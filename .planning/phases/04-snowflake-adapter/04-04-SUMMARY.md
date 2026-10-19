@@ -22,3 +22,26 @@
 - README: "Semantic views (Snowflake)" section (what is generated, the package and a
   packages.yml snippet, what is left out and why). REQUIREMENTS: SEMVW-01/02/05 complete, skipped
   features recorded as SEMVW-V2-03..09.
+
+## Review round 2 / Snowflake smoke run
+
+- A real-Snowflake smoke run failed the export `exp__items_by_country__exp_items_by_country`
+  (snowflake_legacy): `001003 (42000): SQL compilation error: syntax error line 24 at position
+  33 unexpected 'order'`. metricflow 0.213.0 renders every column name and alias as a bare
+  identifier, so the entity `order` came out as `orders_src_10000.order_id AS order` and
+  `subq_10.order`. This is upstream issue dbt-labs/metricflow#2058 (open; metricflow's own
+  reserved-keyword validation rule is a short, non-exhaustive list that misses `order`).
+- Fix: `dbt_s_layer.quoting` subclasses each dialect's metricflow plan renderer (no metricflow
+  patching, no text rewriting). It hooks the column visitors (`visit_column_reference_expr`,
+  `visit_column_alias_reference_expr`, `render_group_by_expr` for BigQuery's group-by-alias) and
+  the private `_render_select_columns_section` (signature pinned in test_stack_surface.py). Only
+  a name in that dialect's reserved list (from vendor docs) is quoted, with the dialect's quote
+  character and the case it folds unquoted names to: `"ORDER"` on Snowflake, `` `order` `` on
+  BigQuery and Databricks, `"order"` elsewhere. Every other name renders byte for byte as before.
+  A user's own `expr` text is never touched.
+- Affected output: only `exp__items_by_country__exp_items_by_country` (all four export and
+  Snowflake artifact sets, all eight adapters); the other 152 rendered export files are
+  byte-identical. No stored snapshot changed.
+- That was also Fusion's dbt0101 warning on the same export ("no viable alternative at input
+  ... AS order"): with the fix, Fusion 2.0.8 compiles snowflake_spec with no dbt0101.
+- Test committed red first: `test_a_reserved_entity_name_is_quoted` (4 sets x 8 adapters).

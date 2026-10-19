@@ -79,7 +79,7 @@ See `_notes/` directory for captured todos:
 - Phase 4 generated Snowflake semantic views compile on dbt Core 1.12.6 and Fusion 2.0.8 but have never run on a real Snowflake account; a smoke run before v1 is the only proof that Snowflake accepts the DDL (key rules, NON ADDITIVE BY with qualified dimensions, percentile functions in metrics)
 - Phase 6/7 reuse `semantic_views.SemanticViewSpec` and add a renderer to the dispatch in `render_semantic_views`; until then non-Snowflake adapters warn once and get no `sem__` files
 - dbt Core 1.12.6 cannot compile a project whose package holds a new-spec semantic model ("depends on 'semantic_model.fx.stores' which is not in the graph"), with or without dbt-s-layer; the Core compile test uses the legacy-spec twin `snowflake_legacy`
-- Fusion 2.0.8 warns dbt0101 on the `exp__items_by_country` export SQL at compile (static analysis of metricflow's join subquery); exports could set `static_analysis='off'` too (not done in Phase 4)
+- ~~Fusion 2.0.8 warns dbt0101 on the `exp__items_by_country` export SQL at compile~~ Resolved in review round 2: the cause was metricflow rendering the entity `order` unquoted (dbt-labs/metricflow#2058), which Snowflake also rejects; exports now quote reserved column names (`dbt_s_layer.quoting`)
 - Minimum supported Fusion version: only 2.0.8 tested; documented as tested, older 2.x not hard-failed (01-RESEARCH.md)
 - Verified 2026-10-19: Fusion 2.0.8 and dbt Core 1.12.6 manifests (both specs) load via `parse_manifest_from_dbt_generated_manifest` and render through `explain()` (01-RESEARCH.md)
 - dbt Core 1.12.6 silently drops semantic models attached to versioned models; `check_artifacts` warns on it (01-04), as it does for Fusion ignoring legacy-spec semantic models

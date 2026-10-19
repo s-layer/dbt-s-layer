@@ -38,3 +38,14 @@
   with the warning `semantic views: skipped sem__<name>: <the error's message>`, and the exports
   and the other views are generated. `build_semantic_views` and `render_snowflake` still raise,
   for direct callers. README updated: such a model is skipped with a WARN, not refused.
+
+## Review round 2 / Snowflake smoke run
+
+- Warnings from building a view that is then skipped no longer print. `_Builder.view()` returns
+  the warnings its join closure raised (`sem__<name> reaches semantic model ... kept the join
+  from ...`) instead of adding them to the builder-wide set, and `render_semantic_views` merges
+  them only for a view it writes. A skipped view reports only `semantic views: skipped
+  sem__<name>: ...`. Metric-level warnings (`skipped metric ...`) are raised once per project,
+  not per view, and are unchanged. Test committed red first:
+  `test_a_skipped_view_keeps_none_of_its_own_warnings` (shadowing skip plus a diamond closure on
+  `sem__orders`).
