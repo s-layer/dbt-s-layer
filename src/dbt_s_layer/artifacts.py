@@ -207,12 +207,12 @@ class DbtManifest(_ManifestModel):
     def _models_only(cls, value: object) -> object:
         if not isinstance(value, dict):
             return value
-        nodes = cast(dict[object, object], value)
+        nodes = cast("dict[object, object]", value)
         models: dict[object, object] = {}
         for node_id, node in nodes.items():
             if (
                 isinstance(node, dict)
-                and cast(dict[object, object], node).get("resource_type") == "model"
+                and cast("dict[object, object]", node).get("resource_type") == "model"
             ):
                 models[node_id] = node
         return models
