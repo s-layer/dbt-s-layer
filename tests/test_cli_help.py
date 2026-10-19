@@ -62,7 +62,11 @@ def test_doctor_command_exits_with_run_doctor_code(
     monkeypatch: pytest.MonkeyPatch, code: int
 ) -> None:
     """`dbt-s-layer doctor` exits with whatever run_doctor() returns."""
-    monkeypatch.setattr(_doctor, "run_doctor", lambda project_dir=None: code)
+
+    def fake(project_dir: Path | None = None) -> int:
+        return code
+
+    monkeypatch.setattr(_doctor, "run_doctor", fake)
     result = runner.invoke(app, ["doctor"])
     assert result.exit_code == code
 

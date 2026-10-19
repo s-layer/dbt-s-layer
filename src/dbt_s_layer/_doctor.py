@@ -8,7 +8,10 @@ Phase 0 scope (per CONTEXT.md, revised at the Phase 0 close-out):
   Fusion only parses the new one.
 - Reports installed `metricflow` version via `importlib.metadata.version`
 
-Deferred to Phase 1: semantic_manifest.json freshness check.
+With `--project-dir` (Phase 1): checks the project's parse artifacts exist, load,
+and are newer than its semantic YAML (CLI-05), and warns about semantic models
+the engine left out.
+
 Deferred to Phase 3: output directory writability check.
 """
 
@@ -21,7 +24,10 @@ import subprocess
 import sys
 from dataclasses import dataclass
 from importlib.metadata import PackageNotFoundError, version
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 FUSION_INSTALL_URL = "https://docs.getdbt.com/docs/fusion/install-fusion"
 DBT_CORE_INSTALL_URL = "https://docs.getdbt.com/docs/core/installation-overview"
@@ -144,13 +150,33 @@ def detect_engines() -> Detection:
     return Detection(tuple(engines), tuple(rejected))
 
 
-def run_doctor() -> int:
+def _check_project(project_dir: Path) -> int:
+    """Print the artifact check for `project_dir`; return 1 if it failed, else 0."""
+    from dbt_s_layer.errors import DbtSLayerError
+    from dbt_s_layer.staleness import check_artifacts
+
+    try:
+        result = check_artifacts(project_dir)
+    except DbtSLayerError as exc:
+        print(f"ERROR artifacts: {exc}", file=sys.stdout)
+        return 1
+    print(f"OK  artifacts: fresh ({result.project.producer})", file=sys.stdout)
+    for warning in result.warnings:
+        print(f"WARN {warning}", file=sys.stdout)
+    return 0
+
+
+def run_doctor(project_dir: Path | None = None) -> int:
     """
     Report environment diagnostics and return an exit code.
 
+    With `project_dir`, also check that project's parse artifacts.
+
     Exit codes:
-        0 - all checks passed (a supported dbt engine AND metricflow importable)
-        1 - no supported dbt engine (blocking; user must install Fusion or dbt Core)
+        0 - all checks passed (a supported dbt engine AND metricflow importable,
+            and, with `project_dir`, fresh artifacts; warnings do not fail)
+        1 - no supported dbt engine (blocking; user must install Fusion or dbt Core),
+            or the project's artifacts are missing, stale or unreadable
         2 - metricflow package not installed (dbt-s-layer install is broken)
 
     When multiple checks fail, the higher-severity code wins (2 > 1 > 0).
@@ -195,5 +221,8 @@ def run_doctor() -> int:
             file=sys.stdout,
         )
         exit_code = max(exit_code, 2)
+
+    if project_dir is not None:
+        exit_code = max(exit_code, _check_project(project_dir))
 
     return exit_code

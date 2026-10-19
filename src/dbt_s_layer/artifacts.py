@@ -85,11 +85,16 @@ def resolve_target_dir(project_dir: Path) -> Path:
 # --- shared reading ---------------------------------------------------------
 
 
+def missing_artifact_error(path: Path, project_dir: Path) -> ArtifactNotFoundError:
+    """Return the error for an artifact `dbt parse` has not written."""
+    return ArtifactNotFoundError(
+        f"{path} does not exist. Run `dbt parse` (dbt Core or Fusion) in {project_dir} first."
+    )
+
+
 def _read_json(path: Path, project_dir: Path) -> object:
     if not path.exists():
-        raise ArtifactNotFoundError(
-            f"{path} does not exist. Run `dbt parse` (dbt Core or Fusion) in {project_dir} first."
-        )
+        raise missing_artifact_error(path, project_dir)
     try:
         text = path.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError) as exc:

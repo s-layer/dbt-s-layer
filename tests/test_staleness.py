@@ -8,9 +8,9 @@ import shutil
 from typing import TYPE_CHECKING, Any
 
 import pytest
-from dbt_s_layer.staleness import check_artifacts, scan_semantic_yaml
 
 from dbt_s_layer.errors import ArtifactNotFoundError, StaleArtifactError
+from dbt_s_layer.staleness import check_artifacts, scan_semantic_yaml
 from tests.conftest import ARTIFACTS
 
 if TYPE_CHECKING:
