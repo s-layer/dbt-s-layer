@@ -42,3 +42,7 @@ class ExportRenderError(DbtSLayerError):
 
 class OutputConflictError(DbtSLayerError):
     """The output directory holds a file dbt-s-layer would overwrite but did not generate."""
+
+
+class ProfileError(DbtSLayerError):
+    """A dbt target's adapter type cannot be read from profiles.yml."""
