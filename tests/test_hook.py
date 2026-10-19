@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -577,8 +578,10 @@ def test_help_lists_the_hook_command() -> None:
     assert "pre-commit" in result.output
     result = runner.invoke(app, ["pre-commit", "--help"])
     assert result.exit_code == 0
+    # Rich colours the help when CI forces colour, splitting `--dbt` with ANSI codes.
+    plain = re.sub(r"\x1b\[[0-9;]*m", "", result.output)
     for option in ("--dbt", "--no-parse", "--project-dir", "--output-dir", "--target"):
-        assert option in result.output
+        assert option in plain
 
 
 # --- the hook definition --------------------------------------------------------
