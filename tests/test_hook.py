@@ -144,6 +144,20 @@ def test_dbt_project_yml_and_generated_files_select_their_project(repo: Path) ->
     assert _select(repo, "analytics/models/semantic/exp__q__e.sql") == [repo / "analytics"]
 
 
+def test_a_local_package_selects_the_project_that_installs_it(tmp_path: Path) -> None:
+    # A package's dbt_project.yml names no profile: it cannot be parsed on its own,
+    # and its semantic models reach the root project's semantic_manifest.json.
+    root = tmp_path / "repo"
+    _write(root / "analytics" / "dbt_project.yml", "name: a\nprofile: a\n")
+    _write(root / "analytics" / "packages" / "dep" / "dbt_project.yml", "name: dep\n")
+    _write(root / "analytics" / "packages" / "dep" / "models" / "s.yml", "semantic_models: []\n")
+    _write(root / "lib" / "dbt_project.yml", "name: lib\n")
+    _write(root / "lib" / "models" / "s.yml", "semantic_models: []\n")
+    assert _select(root, "analytics/packages/dep/models/s.yml") == [root / "analytics"]
+    # With no project above it that names a profile, the nearest one is used.
+    assert _select(root, "lib/models/s.yml") == [root / "lib"]
+
+
 def test_projects_are_sorted_and_unique(repo: Path) -> None:
     files = ("other/models/m.yaml", "analytics/models/orders.yml", "analytics/dbt_project.yml")
     assert _select(repo, *files) == [repo / "analytics", repo / "other"]
