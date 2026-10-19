@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from typing import TYPE_CHECKING, Any
 
 import jinja2
@@ -336,12 +337,12 @@ def test_a_reserved_entity_name_is_quoted(
     body = _by_file(render_exports(project, adapter=adapter))[ITEMS].body
     quoted = QUOTED_ORDER[adapter]
     assert f"AS {quoted}\n" in body
-    assert f"subq_10.{quoted}\n" in body
+    assert re.search(rf"= subq_\d+\.{re.escape(quoted)}\n", body), body
     assert "AS order\n" not in body
     assert ".order\n" not in body
     # Only the reserved name changes: unquoting it gives metricflow's own SQL back.
     plain = body.replace(quoted, "order")
-    assert "order_items_src_10000.order_id = subq_10.order\n" in plain
+    assert re.search(r"order_items_src_10000\.order_id = subq_\d+\.order\n", plain), plain
 
 
 def test_unsupported_adapter(make_project: MakeProject) -> None:

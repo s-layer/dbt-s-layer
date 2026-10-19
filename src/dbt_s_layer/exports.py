@@ -27,11 +27,12 @@ from metricflow_semantics.errors.error_classes import MetricFlowException
 from metricflow_semantics.model.semantic_manifest_lookup import SemanticManifestLookup
 
 from dbt_s_layer.errors import ExportRenderError
+from dbt_s_layer.quoting import quoting_renderer
 from dbt_s_layer.sentinels import build_sentinel_table, postflight, rewrite
 
 if TYPE_CHECKING:
     from metricflow.data_table.mf_table import MetricFlowDataTable
-    from metricflow.sql.render.sql_plan_renderer import SqlPlanRenderer
+    from metricflow.sql.render.sql_plan_renderer import DefaultSqlPlanRenderer, SqlPlanRenderer
     from metricflow_semantic_interfaces.implementations.export import PydanticExport
     from metricflow_semantic_interfaces.implementations.saved_query import PydanticSavedQuery
     from metricflow_semantics.sql.sql_bind_parameters import SqlBindParameterSet
@@ -47,7 +48,7 @@ _SAFE_NAME_RE = re.compile(r"[A-Za-z0-9_]+")
 _JINJA_RE = re.compile(r"\{[{%]")
 
 # dbt adapter_type -> metricflow dialect.
-_DIALECTS: dict[str, tuple[SqlEngine, type[SqlPlanRenderer]]] = {
+_DIALECTS: dict[str, tuple[SqlEngine, type[DefaultSqlPlanRenderer]]] = {
     "athena": (SqlEngine.ATHENA, AthenaSqlPlanRenderer),
     "bigquery": (SqlEngine.BIGQUERY, BigQuerySqlPlanRenderer),
     "databricks": (SqlEngine.DATABRICKS, DatabricksSqlPlanRenderer),
@@ -121,7 +122,7 @@ def sql_client_for(adapter: str) -> _RenderOnlySqlClient:
             f"supported: {', '.join(SUPPORTED_ADAPTERS)}."
         )
     engine, renderer = dialect
-    return _RenderOnlySqlClient(engine, renderer())
+    return _RenderOnlySqlClient(engine, quoting_renderer(adapter, renderer)())
 
 
 def _one_line(exc: BaseException) -> str:

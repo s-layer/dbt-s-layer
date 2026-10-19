@@ -65,3 +65,20 @@ def test_metricflow_engine_exposes_explain() -> None:
     from metricflow.engine.metricflow_engine import MetricFlowEngine
 
     assert callable(MetricFlowEngine.explain)
+
+
+def test_plan_renderers_expose_the_column_hooks_quoting_overrides() -> None:
+    """`dbt_s_layer.quoting` overrides these; a renamed one would silently stop quoting."""
+    import inspect
+
+    from metricflow.sql.render.expr_renderer import DefaultSqlExpressionRenderer
+    from metricflow.sql.render.sql_plan_renderer import DefaultSqlPlanRenderer
+
+    select = inspect.signature(DefaultSqlPlanRenderer._render_select_columns_section)  # pyright: ignore[reportPrivateUsage]
+    assert list(select.parameters) == ["self", "select_columns", "num_parents", "distinct"]
+    for name in (
+        "visit_column_reference_expr",
+        "visit_column_alias_reference_expr",
+        "render_group_by_expr",
+    ):
+        assert callable(getattr(DefaultSqlExpressionRenderer, name))

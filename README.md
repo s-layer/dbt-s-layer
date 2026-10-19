@@ -55,6 +55,7 @@ Each `export` of a `saved_query` becomes one model, `exp__<saved_query>__<export
 - `schema`, if you set one on the export or the saved query, goes through your project's `generate_schema_name` like any dbt model schema. With dbt's default macro that means `<target schema>_<schema>`, where dbt Cloud would write to the schema exactly as named.
 - The SQL dialect follows the adapter of the target you parsed with, unless you pass `--adapter` or `--target`.
 - The schema file describes each export with its saved query's `description`.
+- An entity, dimension or metric named like a reserved word of the dialect (`order`, `group`, ...) is quoted in the SQL, in the case the warehouse gives an unquoted name (`"ORDER"` on Snowflake), so the column keeps its usual name. MetricFlow itself leaves such names bare ([metricflow#2058](https://github.com/dbt-labs/metricflow/issues/2058)). SQL you write in an `expr` is used as written: quote a reserved word there yourself.
 
 ## Semantic views (Snowflake)
 
