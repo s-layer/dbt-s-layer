@@ -195,6 +195,7 @@ def test_new_spec_closure(set_name: str, make_project: MakeProject) -> None:
             child_column="order_id",
             parent="orders",
             parent_column="order_id",
+            entity="order",
         ),
     )
     # orders' foreign entity `customer` matches nothing: customers' entity is `cust`.
@@ -509,6 +510,51 @@ def test_approximate_discrete_percentile_is_skipped(make_project: MakeProject) -
     assert "p90" not in {m.name for m in _view(build, "orders").metrics}
     [warning] = _warnings(build, "'p90'")
     assert "approximate discrete percentile" in warning
+
+
+def test_supported_percentiles_depend_on_the_adapter(make_project: MakeProject) -> None:
+    # Snowflake has no approximate discrete percentile, Databricks no approximate
+    # continuous one (metricflow's own Databricks renderer refuses it).
+    project_dir = make_project("fusion_new")
+
+    def percentile(name: str, *, discrete: bool) -> Callable[[Raw], None]:
+        options = {
+            "percentile": 0.9,
+            "use_discrete_percentile": discrete,
+            "use_approximate_percentile": True,
+        }
+        return lambda raw: raw["metrics"].append(
+            _simple(raw, name, "orders", "percentile", "amount", agg_params=options)
+        )
+
+    _semantic(project_dir, percentile("approx_disc", discrete=True))
+    _semantic(project_dir, percentile("approx_cont", discrete=False))
+    project = load_project(project_dir)
+    for adapter, kept, skipped in (
+        ("snowflake", "approx_cont", "approx_disc"),
+        ("databricks", "approx_disc", "approx_cont"),
+    ):
+        build = build_semantic_views(project, adapter=adapter)
+        names = {m.name for m in _view(build, "orders").metrics}
+        assert kept in names
+        assert skipped not in names
+        [warning] = _warnings(build, f"{skipped!r}")
+        assert "approximate" in warning
+
+
+def test_labels_are_kept(make_project: MakeProject) -> None:
+    project_dir = make_project("fusion_new")
+
+    def label(raw: Raw) -> None:
+        dimension = next(
+            d for d in _model(raw, "orders")["dimensions"] if d["name"] == "ordered_at"
+        )
+        dimension["label"] = "Ordered at"
+
+    _semantic(project_dir, label)
+    orders = _view(_build(project_dir), "orders")
+    assert next(m for m in orders.metrics if m.name == "revenue").label == "Revenue"
+    assert next(d for d in orders.dimensions if d.name == "ordered_at").label == "Ordered at"
 
 
 def test_private_metric(make_project: MakeProject) -> None:
