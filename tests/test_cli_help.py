@@ -64,7 +64,7 @@ def test_doctor_command_exits_with_run_doctor_code(
 ) -> None:
     """`dbt-s-layer doctor` exits with whatever run_doctor() returns."""
 
-    def fake(project_dir: Path | None = None) -> int:
+    def fake(project_dir: Path | None = None, output_dir: Path | None = None) -> int:
         return code
 
     monkeypatch.setattr(_doctor, "run_doctor", fake)
@@ -76,7 +76,7 @@ def test_doctor_passes_project_dir(monkeypatch: pytest.MonkeyPatch, tmp_path: Pa
     """`dbt-s-layer doctor --project-dir DIR` hands DIR to run_doctor()."""
     seen: list[Path | None] = []
 
-    def fake(project_dir: Path | None = None) -> int:
+    def fake(project_dir: Path | None = None, output_dir: Path | None = None) -> int:
         seen.append(project_dir)
         return 0
 

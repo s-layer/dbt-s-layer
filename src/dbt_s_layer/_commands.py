@@ -127,7 +127,11 @@ def run_check(options: Options) -> int:
         _out(f"{output_dir} is up to date ({_count(len(files))}).")
         return 0
     _out(f"{output_dir} is out of date:")
-    for label, names in (("changed", diff.changed), ("missing", diff.missing), ("stale", diff.stale)):
+    for label, names in (
+        ("changed", diff.changed),
+        ("missing", diff.missing),
+        ("stale", diff.stale),
+    ):
         for name in names:
             _out(f"  {label}: {name}")
     _out("Run `dbt-s-layer generate` with the same options to update it.")

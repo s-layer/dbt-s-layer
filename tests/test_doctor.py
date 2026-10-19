@@ -14,7 +14,6 @@ import pytest
 from typer.testing import CliRunner
 
 from dbt_s_layer import _doctor
-from dbt_s_layer.cli import app
 from dbt_s_layer._doctor import (
     DBT_CORE_INSTALL_URL,
     FUSION_INSTALL_URL,
@@ -23,9 +22,9 @@ from dbt_s_layer._doctor import (
     parse_engine_version,
     run_doctor,
 )
+from dbt_s_layer.cli import app
 
 if TYPE_CHECKING:
-
     from tests.conftest import MakeProject
 
 # Real `--version` output, captured 2026-10-19 from the builds named.
@@ -492,6 +491,13 @@ def test_doctor_skips_project_check_without_metricflow(
 # --- output directory (CLI-03) ------------------------------------------------
 
 
+def _refuse_access(locked: Path) -> Callable[[object, int], bool]:
+    def access(path: object, mode: int) -> bool:
+        return Path(str(path)) != locked
+
+    return access
+
+
 def test_doctor_output_dir_writable(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -533,9 +539,7 @@ def test_doctor_output_dir_not_writable(
     if existing:
         out.mkdir()
     locked = out if existing else project_dir / "models"
-    monkeypatch.setattr(
-        _doctor.os, "access", lambda path, mode: Path(path) != locked  # pyright: ignore[reportUnknownLambdaType]
-    )
+    monkeypatch.setattr(_doctor.os, "access", _refuse_access(locked))
     assert run_doctor(project_dir) == 1
     text = capsys.readouterr().out
     assert "ERROR output directory:" in text
@@ -552,9 +556,7 @@ def test_doctor_output_dir_parent_not_writable(
     project_dir = make_project("core_export")
     (project_dir / "models" / "semantic").mkdir()
     locked = project_dir / "models"
-    monkeypatch.setattr(
-        _doctor.os, "access", lambda path, mode: Path(path) != locked  # pyright: ignore[reportUnknownLambdaType]
-    )
+    monkeypatch.setattr(_doctor.os, "access", _refuse_access(locked))
     assert run_doctor(project_dir) == 1
     assert "ERROR output directory:" in capsys.readouterr().out
 
@@ -571,7 +573,9 @@ def test_doctor_output_dir_is_a_file(
     assert "is not a directory" in capsys.readouterr().out
 
 
-def test_doctor_cli_passes_output_dir(make_project: MakeProject, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_doctor_cli_passes_output_dir(
+    make_project: MakeProject, monkeypatch: pytest.MonkeyPatch
+) -> None:
     seen: list[tuple[object, object]] = []
 
     def fake(project_dir: object = None, output_dir: object = None) -> int:

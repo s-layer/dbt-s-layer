@@ -102,15 +102,22 @@ def doctor(
         Path | None,
         typer.Option(
             "--project-dir",
-            help="Also check this dbt project's parse artifacts exist and are up to date.",
+            help="Also check this dbt project's parse artifacts and output directory.",
             file_okay=False,
         ),
     ] = None,
+    output_dir: Annotated[
+        Path | None,
+        typer.Option(
+            "--output-dir",
+            help="Output directory to check (default: models/semantic, relative to --project-dir).",
+        ),
+    ] = None,
 ) -> None:
-    """Report environment diagnostics (dbt engine, metricflow version, project artifacts)."""
+    """Report environment diagnostics (dbt engine, metricflow, project artifacts, output dir)."""
     from dbt_s_layer import _doctor
 
-    raise typer.Exit(code=_doctor.run_doctor(project_dir))
+    raise typer.Exit(code=_doctor.run_doctor(project_dir, output_dir))
 
 
 if __name__ == "__main__":

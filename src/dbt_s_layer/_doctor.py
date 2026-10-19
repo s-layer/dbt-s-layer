@@ -12,7 +12,9 @@ With `--project-dir` (Phase 1): checks the project's parse artifacts exist, load
 and are newer than its semantic YAML (CLI-05), and warns about semantic models
 the engine left out.
 
-Deferred to Phase 3: output directory writability check.
+With `--project-dir` or `--output-dir` (Phase 3): checks the output directory
+(default `models/semantic` under the project) can be written, along with the
+parent directory `generate` stages files in.
 """
 
 from __future__ import annotations
@@ -24,10 +26,8 @@ import subprocess
 import sys
 from dataclasses import dataclass
 from importlib.metadata import PackageNotFoundError, version
-from typing import TYPE_CHECKING, Literal
-
-if TYPE_CHECKING:
-    from pathlib import Path
+from pathlib import Path
+from typing import Literal
 
 FUSION_INSTALL_URL = "https://docs.getdbt.com/docs/fusion/install-fusion"
 DBT_CORE_INSTALL_URL = "https://docs.getdbt.com/docs/core/installation-overview"
@@ -166,17 +166,52 @@ def _check_project(project_dir: Path) -> int:
     return 0
 
 
-def run_doctor(project_dir: Path | None = None) -> int:
+def _check_output_dir(output_dir: Path) -> int:
+    """Print whether `generate` could write `output_dir`; return 1 if not, else 0."""
+    if output_dir.exists() and not output_dir.is_dir():
+        print(f"ERROR output directory: {output_dir} is not a directory", file=sys.stdout)
+        return 1
+    # `generate` stages files beside the output directory, then moves them in.
+    needed = [output_dir, output_dir.parent] if output_dir.exists() else [output_dir.parent]
+    existing = [p for p in needed if p.exists()]
+    if not existing:
+        ancestor = output_dir.parent
+        while not ancestor.exists():
+            ancestor = ancestor.parent
+        existing = [ancestor]
+    for path in existing:
+        if not path.is_dir() or not os.access(path, os.W_OK | os.X_OK):
+            print(
+                f"ERROR output directory: {path} is not writable, so `generate` cannot "
+                f"write {output_dir}",
+                file=sys.stdout,
+            )
+            return 1
+    if output_dir.exists():
+        print(f"OK  output directory: {output_dir} is writable", file=sys.stdout)
+    else:
+        print(
+            f"OK  output directory: {output_dir} does not exist yet; `generate` will "
+            f"create it in {existing[0]}",
+            file=sys.stdout,
+        )
+    return 0
+
+
+def run_doctor(project_dir: Path | None = None, output_dir: Path | None = None) -> int:
     """
     Report environment diagnostics and return an exit code.
 
-    With `project_dir`, also check that project's parse artifacts.
+    With `project_dir`, also check that project's parse artifacts. With
+    `project_dir` or `output_dir`, also check the output directory (relative to
+    the project, or to the working directory without one).
 
     Exit codes:
         0 - all checks passed (a supported dbt engine AND metricflow importable,
             and, with `project_dir`, fresh artifacts; warnings do not fail)
         1 - no supported dbt engine (blocking; user must install Fusion or dbt Core),
-            or the project's artifacts are missing, stale or unreadable
+            or the project's artifacts are missing, stale or unreadable, or the
+            output directory cannot be written
         2 - metricflow package not installed (dbt-s-layer install is broken)
 
     When multiple checks fail, the higher-severity code wins (2 > 1 > 0).
@@ -232,5 +267,12 @@ def run_doctor(project_dir: Path | None = None) -> int:
             print(
                 "SKIP artifacts: not checked because metricflow is not installed", file=sys.stdout
             )
+
+    if project_dir is not None or output_dir is not None:
+        from dbt_s_layer._commands import DEFAULT_OUTPUT_DIR, resolve_output_dir
+
+        base = project_dir if project_dir is not None else Path.cwd()
+        resolved = resolve_output_dir(base.resolve(), output_dir or DEFAULT_OUTPUT_DIR)
+        exit_code = max(exit_code, _check_output_dir(resolved))
 
     return exit_code
