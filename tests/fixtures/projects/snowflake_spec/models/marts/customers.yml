@@ -1,0 +1,26 @@
+models:
+  - name: customers
+    latest_version: 2
+    versions:
+      - v: 1
+      - v: 2
+    semantic_model:
+      enabled: true
+    agg_time_dimension: signed_up_at
+    columns:
+      - name: customer_id
+        entity:
+          type: primary
+          name: customer
+      - name: country
+        dimension:
+          type: categorical
+      - name: signed_up_at
+        granularity: day
+        dimension:
+          type: time
+    metrics:
+      - name: customer_count
+        type: simple
+        agg: count_distinct
+        expr: customer_id

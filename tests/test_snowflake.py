@@ -25,7 +25,7 @@ from dbt_s_layer.semantic_views import (
     build_semantic_views,
 )
 from dbt_s_layer.snowflake import quote_identifier, render_snowflake, sql_string
-from tests.conftest import ARTIFACT_SETS, EXPORT_SETS
+from tests.conftest import ARTIFACT_SETS, EXPORT_SETS, SNOWFLAKE_SETS
 
 if TYPE_CHECKING:
     from tests.conftest import MakeProject
@@ -398,14 +398,14 @@ def test_qualified_reference_to_the_same_table_counts() -> None:
 
 def _snapshot_sets() -> list[tuple[str, str]]:
     cases: list[tuple[str, str]] = []
-    for set_name in [*ARTIFACT_SETS, *EXPORT_SETS]:
+    for set_name in [*ARTIFACT_SETS, *EXPORT_SETS, *SNOWFLAKE_SETS]:
         folder = SNAPSHOTS / set_name
         names = sorted(p.stem for p in folder.glob("*.sql")) if folder.is_dir() else []
         cases += [(set_name, name) for name in names]
     return cases
 
 
-@pytest.mark.parametrize("set_name", [*ARTIFACT_SETS, *EXPORT_SETS])
+@pytest.mark.parametrize("set_name", [*ARTIFACT_SETS, *EXPORT_SETS, *SNOWFLAKE_SETS])
 def test_snapshots_cover_every_view(set_name: str, make_project: MakeProject) -> None:
     build = build_semantic_views(load_project(make_project(set_name)))
     folder = SNAPSHOTS / set_name
@@ -421,4 +421,35 @@ def test_snapshots_cover_every_view(set_name: str, make_project: MakeProject) ->
 
 
 def test_snapshots_exist() -> None:
-    assert {s for s, _ in _snapshot_sets()} == {*ARTIFACT_SETS, *EXPORT_SETS}
+    assert {s for s, _ in _snapshot_sets()} == {*ARTIFACT_SETS, *EXPORT_SETS, *SNOWFLAKE_SETS}
+
+
+def test_percentile_float32_noise_is_rounded() -> None:
+    # Fusion 2.0.8 writes `percentile: 0.9` as 0.8999999761581421.
+    metric = replace(
+        REVENUE,
+        agg="percentile",
+        percentile=PercentileSpec(value=0.8999999761581421, discrete=False, approximate=False),
+    )
+    assert _metric_line(metric) == (
+        "orders.revenue AS PERCENTILE_CONT(0.9) WITHIN GROUP (ORDER BY amount)"
+    )
+
+
+# --- the Snowflake fixture project ------------------------------------------------------
+
+
+@pytest.mark.parametrize("set_name", SNOWFLAKE_SETS)
+def test_snowflake_fixture_metrics(set_name: str, make_project: MakeProject) -> None:
+    project = load_project(make_project(set_name))
+    build = build_semantic_views(project)
+    orders = next(v for v in build.views if v.name == "orders")
+    body = render_snowflake(orders)
+    assert "  orders.order_count AS COUNT(DISTINCT order_id) COMMENT = 'Distinct orders.'" in body
+    assert "  orders.latest_revenue NON ADDITIVE BY (orders.ordered_at ASC) AS SUM(amount)" in body
+    assert "  orders.revenue_p90 AS PERCENTILE_DISC(0.9) WITHIN GROUP (ORDER BY amount)" in body
+    assert "  average_order_value AS orders.revenue / NULLIF(orders.order_count, 0)" in body
+    assert "  revenue_doubled AS orders.revenue * 2" in body
+    assert "COMMENT = 'One row per order. It''s the ''fact'' table.'" in body
+    skipped = [w for w in build.warnings if "skipped metric" in w]
+    assert [w.split("'")[1] for w in skipped] == ["revenue_cumulative", "revenue_per_item"]

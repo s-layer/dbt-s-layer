@@ -23,7 +23,7 @@ from dbt_s_layer.output import (
 from dbt_s_layer.project import load_project
 from dbt_s_layer.semantic_views import build_semantic_views
 from dbt_s_layer.snowflake import MATERIALIZATION_MACRO, render_snowflake
-from tests.conftest import EXPORT_SETS
+from tests.conftest import EXPORT_SETS, SNOWFLAKE_SETS
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -777,3 +777,12 @@ def test_earlier_semantic_views_do_not_clash(make_project: MakeProject) -> None:
         _add_node(project_dir, stem, original_file_path=f"models/semantic/{name}")
     files = _render_snowflake_into(project_dir)
     assert [n for n in files if n.startswith("sem__")] == SEM_FILES["fusion_export"]
+
+
+@pytest.mark.parametrize("set_name", SNOWFLAKE_SETS)
+def test_installed_package_in_the_snowflake_fixture(
+    set_name: str, make_project: MakeProject
+) -> None:
+    files = render_output(load_project(make_project(set_name)))
+    assert "sem__orders.sql" in files
+    assert not [w for w in files.warnings if "dbt_semantic_view" in w]

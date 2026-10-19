@@ -1,0 +1,18 @@
+# Dummy credentials: `dbt parse` and `dbt compile` never connect (dbt Core compiles with
+# --no-populate-cache). Both engines use the `snowflake` target.
+fx:
+  target: duckdb
+  outputs:
+    snowflake:
+      type: snowflake
+      account: dummy
+      user: dummy
+      password: dummy
+      role: dummy
+      database: ANALYTICS
+      warehouse: WH
+      schema: MARTS
+    duckdb:
+      type: duckdb
+      path: ":memory:"
+      schema: marts

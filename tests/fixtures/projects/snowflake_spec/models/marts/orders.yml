@@ -1,0 +1,94 @@
+# The Snowflake fixture: export_spec plus metrics that exercise the semantic view mapping.
+# No saved query groups by customers' dimensions: dbt Core 1.12.6 drops the semantic model
+# on the versioned `customers` model, and would then refuse to parse.
+models:
+  - name: orders
+    description: "One row per order. It's the 'fact' table."
+    semantic_model:
+      enabled: true
+    agg_time_dimension: ordered_at
+    columns:
+      - name: order_id
+        entity:
+          type: primary
+          name: order
+      - name: customer_id
+        entity:
+          type: foreign
+          name: customer
+      - name: store_id
+        entity:
+          type: foreign
+          name: store
+      - name: status
+        dimension:
+          type: categorical
+      - name: ordered_at
+        granularity: day
+        dimension:
+          type: time
+    metrics:
+      - name: revenue
+        type: simple
+        label: Revenue
+        agg: sum
+        expr: amount
+      - name: revenue_cumulative
+        type: cumulative
+        input_metric: revenue
+      - name: order_count
+        type: simple
+        description: Distinct orders.
+        agg: count_distinct
+        expr: order_id
+      - name: revenue_p90
+        type: simple
+        agg: percentile
+        percentile: 0.9
+        percentile_type: discrete
+        expr: amount
+      - name: latest_revenue
+        type: simple
+        agg: sum
+        expr: amount
+        non_additive_dimension:
+          name: ordered_at
+          window_agg: max
+      - name: average_order_value
+        type: ratio
+        numerator: revenue
+        denominator: order_count
+      - name: revenue_doubled
+        type: derived
+        expr: rev * 2
+        input_metrics:
+          - name: revenue
+            alias: rev
+      - name: revenue_per_item
+        type: derived
+        expr: revenue / items_sold
+        input_metrics:
+          - name: revenue
+          - name: items_sold
+saved_queries:
+  - name: revenue_by_day
+    query_params:
+      metrics: [revenue]
+      group_by: ["TimeDimension('order__ordered_at', 'day')"]
+    exports:
+      - name: exp_revenue_by_day
+        config:
+          export_as: table
+      - name: exp_revenue_by_day_view
+        config:
+          export_as: view
+          alias: revenue_daily
+          schema: reporting
+  - name: cumulative_revenue
+    query_params:
+      metrics: [revenue_cumulative]
+      group_by: ["TimeDimension('metric_time', 'day')"]
+    exports:
+      - name: exp_cumulative
+        config:
+          export_as: table

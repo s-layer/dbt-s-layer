@@ -19,11 +19,15 @@ SET_PROJECTS = {
     "core_legacy": "legacy_spec",
     "fusion_export": "export_spec",
     "core_export": "export_legacy",
+    "fusion_snowflake": "snowflake_spec",
+    "core_snowflake": "snowflake_spec",
 }
 # Sets the Phase 1 loader tests run over.
 ARTIFACT_SETS = ("fusion_new", "core_new", "core_legacy")
 # Sets parsed from the export fixture projects, with a package and versioned models.
 EXPORT_SETS = ("fusion_export", "core_export")
+# Sets parsed on a Snowflake target with the dbt_semantic_view package installed.
+SNOWFLAKE_SETS = ("fusion_snowflake", "core_snowflake")
 
 MakeProject = Callable[[str], Path]
 
