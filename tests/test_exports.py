@@ -410,3 +410,60 @@ def test_export_names_must_make_safe_file_names(name: str, make_project: MakePro
     project = load_project(_mutate(make_project, "core_export", rename, rename_dbt))
     with pytest.raises(ExportRenderError, match=r"revenue_by_day.*letters, digits and underscores"):
         render_exports(project)
+
+
+# --- review round 1 -----------------------------------------------------------
+
+
+def test_duplicate_relations_are_refused(make_project: MakeProject) -> None:
+    # Different files, but both exports default their alias to `daily` in the
+    # target schema, so dbt would refuse two models on one relation.
+    def rename(raw: dict[str, Any]) -> None:
+        for sq in raw["saved_queries"]:
+            if sq["name"] in ("cumulative_revenue", "revenue_by_region_country"):
+                sq["exports"][0]["name"] = "daily"
+                sq["exports"][0]["config"]["alias"] = "daily"
+
+    def rename_dbt(raw: dict[str, Any]) -> None:
+        for key in ("cumulative_revenue", "revenue_by_region_country"):
+            raw["saved_queries"][f"saved_query.fx.{key}"]["exports"][0]["name"] = "daily"
+
+    project = load_project(_mutate(make_project, "core_export", rename, rename_dbt))
+    with pytest.raises(ExportRenderError, match=r"alias 'daily'.*cumulative_revenue.*region"):
+        render_exports(project)
+
+
+def test_same_alias_in_different_schemas_is_allowed(make_project: MakeProject) -> None:
+    def alias(raw: dict[str, Any]) -> None:
+        for sq in raw["saved_queries"]:
+            if sq["name"] == "items_by_country":
+                sq["exports"][0]["config"]["alias"] = "exp_revenue_by_day"
+
+    models = _by_file(render_exports(load_project(_mutate(make_project, "core_export", alias))))
+    items = models["exp__items_by_country__exp_items_by_country.sql"]
+    assert (items.alias, items.schema) == ("exp_revenue_by_day", "sq_schema")
+
+
+def test_export_missing_from_manifest_json(make_project: MakeProject) -> None:
+    def drop(raw: dict[str, Any]) -> None:
+        raw["saved_queries"]["saved_query.fx.revenue_by_day"]["exports"].pop()
+
+    project = load_project(_mutate(make_project, "core_export", dbt=drop))
+    with pytest.raises(ExportRenderError, match=r"exp_revenue_by_day_view.*manifest\.json"):
+        render_exports(project)
+
+
+def test_jinja_in_unrendered_config_uses_the_rendered_value(make_project: MakeProject) -> None:
+    # manifest.json keeps what the user typed; a templated value must come from
+    # the rendered config, or `{{ env_var(...) }}` would land in config() as text.
+    def templated(raw: dict[str, Any]) -> None:
+        export = raw["saved_queries"]["saved_query.fx.revenue_by_day"]["exports"][1]
+        export["unrendered_config"]["schema"] = "{{ env_var('EXPORT_SCHEMA') }}"
+        export["unrendered_config"]["export_as"] = "{{ 'view' }}"
+
+    models = _by_file(
+        render_exports(load_project(_mutate(make_project, "core_export", dbt=templated)))
+    )
+    view = models["exp__revenue_by_day__exp_revenue_by_day_view.sql"]
+    assert (view.materialized, view.schema) == ("view", "reporting")
+    assert "env_var" not in view.body

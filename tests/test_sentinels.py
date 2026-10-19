@@ -338,3 +338,12 @@ def test_rewrite_refuses_unknown_tokens(set_name: str, make_project: MakeProject
 
 def _relations_of(manifest: Any) -> dict[str, str]:
     return {sm.name: sm.node_relation.relation_name for sm in manifest.semantic_models}
+
+
+def test_preflight_checks_time_spine_nodes(make_project: MakeProject) -> None:
+    def poison(raw: dict[str, Any]) -> None:
+        raw["nodes"]["model.fx.metricflow_time_spine"]["name"] = "__ref__spine"
+
+    project_dir = _mutate(make_project, "core_export", "manifest.json", poison)
+    with pytest.raises(SentinelCollisionError, match=r"metricflow_time_spine.*__REF__"):
+        build_sentinel_table(load_project(project_dir))
