@@ -291,6 +291,35 @@ def test_rendering_is_repeatable(set_name: str, make_project: MakeProject) -> No
     assert render_exports(project) == render_exports(project)
 
 
+def test_metric_order_in_the_manifest_does_not_change_the_sql(make_project: MakeProject) -> None:
+    # dbt Core lists metrics in YAML order and Fusion sorts them by name; metricflow
+    # follows that order inside the query, so a switch of engine would rewrite every
+    # export with two metrics on one semantic model.
+    def two_metrics(raw: dict[str, Any]) -> None:
+        revenue = next(m for m in raw["metrics"] if m["name"] == "revenue")
+        extra = json.loads(json.dumps(revenue))
+        extra.update(name="a_orders", label="A orders")
+        # A count, and a join to customers, keep the measures in an inner select.
+        extra["type_params"]["metric_aggregation_params"]["agg"] = "count"
+        raw["metrics"] = sorted([*raw["metrics"], extra], key=lambda m: m["name"])
+        saved = next(q for q in raw["saved_queries"] if q["name"] == "revenue_by_day")
+        saved["query_params"].update(
+            metrics=["revenue", "a_orders"],
+            group_by=["TimeDimension('metric_time', 'day')", "Dimension('customer__country')"],
+        )
+
+    def reverse(raw: dict[str, Any]) -> None:
+        raw["metrics"].reverse()
+
+    name = "exp__revenue_by_day__exp_revenue_by_day.sql"
+    project_dir = _mutate(make_project, "fusion_export", two_metrics)
+    by_name = _by_file(render_exports(load_project(project_dir)))[name].body
+    _rewrite(project_dir, reverse)
+    reversed_order = _by_file(render_exports(load_project(project_dir)))[name].body
+    assert "subq_" in by_name
+    assert reversed_order == by_name
+
+
 # --- adapters -----------------------------------------------------------------
 
 

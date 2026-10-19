@@ -135,6 +135,12 @@ def read_semantic_manifest(path: Path, *, project_dir: Path) -> PydanticSemantic
         manifest = transform_dbt_generated_manifest(raw)
     except MetricFlowException as exc:
         raise _rejected(path, exc) from exc
+    # dbt Core lists these in YAML order and Fusion sorts them by name. metricflow
+    # follows the order in the SQL it writes, so sort them for the same output from
+    # either engine.
+    manifest.semantic_models.sort(key=lambda sm: sm.name)
+    manifest.metrics.sort(key=lambda m: m.name)
+    manifest.saved_queries.sort(key=lambda sq: sq.name)
 
     # metricflow's default-rules argument is typed against an unsolved TypeVar.
     validator = cast(
