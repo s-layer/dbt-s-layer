@@ -88,6 +88,9 @@ class RelationshipSpec:
     child_column: str
     parent: str
     parent_column: str
+    # The entity the join goes through: metricflow names the parent's elements after
+    # it (`order__ordered_at`).
+    entity: str = ""
 
 
 @dataclass(frozen=True)
@@ -98,6 +101,7 @@ class DimensionSpec:
     name: str
     expr: str
     comment: str | None = None
+    label: str | None = None
 
 
 @dataclass(frozen=True)
@@ -129,6 +133,7 @@ class MetricSpec:
     non_additive: NonAdditiveSpec | None = None
     private: bool = False
     comment: str | None = None
+    label: str | None = None
 
 
 @dataclass(frozen=True)
@@ -147,6 +152,7 @@ class DerivedMetricSpec:
     parts: tuple[str | MetricRef, ...]
     private: bool = False
     comment: str | None = None
+    label: str | None = None
 
 
 @dataclass(frozen=True)
@@ -250,6 +256,11 @@ def _description(text: str | None) -> str | None:
     return text if text else None
 
 
+def _label(label: str | None, name: str) -> str | None:
+    # metricflow fills an unset label with the name, which says nothing more.
+    return label if label and label != name else None
+
+
 def _skipped(metric: str, reason: str) -> str:
     return f"semantic views: skipped metric {metric!r}: {reason}."
 
@@ -264,8 +275,21 @@ class _Key:
     column: str
 
 
+def unsupported_percentile(adapter: str, percentile: PercentileSpec) -> str | None:
+    """Why `adapter` cannot compute `percentile`, or None when it can."""
+    if not percentile.approximate:
+        return None
+    if adapter == "databricks" and not percentile.discrete:
+        # metricflow's Databricks renderer refuses it too.
+        return "approximate continuous percentiles are not supported on Databricks"
+    if adapter != "databricks" and percentile.discrete:
+        return "approximate discrete percentiles are not supported"
+    return None
+
+
 class _Builder:
-    def __init__(self, project: SemanticProject) -> None:
+    def __init__(self, project: SemanticProject, adapter: str) -> None:
+        self.adapter = adapter
         self.warnings: set[str] = set()
         self.models: dict[str, PydanticSemanticModel] = {
             sm.name.lower(): sm for sm in project.semantic_manifest.semantic_models
@@ -345,6 +369,7 @@ class _Builder:
                                 child_column=key.column,
                                 parent=parent.model,
                                 parent_column=parent.column,
+                                entity=key.entity,
                             )
                         )
             frontier = reached
@@ -421,16 +446,15 @@ class _Builder:
             if options is None or options.percentile is None:
                 self.warnings.add(_skipped(metric.name, "its percentile is not set"))
                 return None
-            if options.use_discrete_percentile and options.use_approximate_percentile:
-                self.warnings.add(
-                    _skipped(metric.name, "approximate discrete percentiles are not supported")
-                )
-                return None
             percentile = PercentileSpec(
                 value=options.percentile,
                 discrete=options.use_discrete_percentile,
                 approximate=options.use_approximate_percentile,
             )
+            reason = unsupported_percentile(self.adapter, percentile)
+            if reason is not None:
+                self.warnings.add(_skipped(metric.name, reason))
+                return None
 
         fills = params.fill_nulls_with is not None or params.join_to_timespine
         if measure is not None:
@@ -449,6 +473,7 @@ class _Builder:
             non_additive=non_additive,
             private=bool(params.is_private),
             comment=_description(metric.description),
+            label=_label(metric.label, metric.name),
         )
 
     def _derived_metrics(self, metrics: Iterable[PydanticMetric]) -> dict[str, DerivedMetricSpec]:
@@ -486,6 +511,7 @@ class _Builder:
                 parts=parts,
                 private=bool(params.is_private),
                 comment=_description(metric.description),
+                label=_label(metric.label, metric.name),
             )
         return specs
 
@@ -560,11 +586,23 @@ class _Builder:
             if alias == root:
                 taken |= metric_names
             table_dims = [
-                DimensionSpec(alias, d.name, d.expr or d.name, _description(d.description))
+                DimensionSpec(
+                    alias,
+                    d.name,
+                    d.expr or d.name,
+                    _description(d.description),
+                    _label(d.label, d.name),
+                )
                 for d in sm.dimensions
             ]
             table_dims += [
-                DimensionSpec(alias, e.name, e.expr or e.name, _description(e.description))
+                DimensionSpec(
+                    alias,
+                    e.name,
+                    e.expr or e.name,
+                    _description(e.description),
+                    _label(e.label, e.name),
+                )
                 for e in sm.entities
                 if e.type in _JOIN_TYPES and e.name not in taken
             ]
@@ -601,9 +639,11 @@ def _substitute(expr: str, refs: Mapping[str, MetricRef]) -> tuple[str | MetricR
     return tuple(parts)
 
 
-def build_semantic_views(project: SemanticProject) -> SemanticViewBuild:
-    """Describe one semantic view per semantic model, sorted by name."""
-    builder = _Builder(project)
+def build_semantic_views(
+    project: SemanticProject, *, adapter: str = "snowflake"
+) -> SemanticViewBuild:
+    """Describe one semantic view per semantic model for `adapter`, sorted by name."""
+    builder = _Builder(project, adapter)
     views: list[SemanticViewSpec] = []
     warnings = set(builder.warnings)
     for name in sorted(builder.models):
@@ -661,7 +701,7 @@ def render_semantic_views(project: SemanticProject, *, adapter: str) -> Semantic
                 "were generated.",
             ),
         )
-    builder = _Builder(project)
+    builder = _Builder(project, adapter)
     models: list[SemanticViewModel] = []
     warnings = set(builder.warnings)
     for name in sorted(builder.models):

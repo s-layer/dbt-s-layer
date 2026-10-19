@@ -423,7 +423,7 @@ def test_natural_entities_are_skipped(make_project: MakeProject) -> None:
 def test_simple_metrics_of_the_root_only(set_name: str, make_project: MakeProject) -> None:
     build = _build(make_project(set_name))
     assert _view(build, "orders").metrics == (
-        MetricSpec(table="orders", name="revenue", agg="sum", expr="amount"),
+        MetricSpec(table="orders", name="revenue", agg="sum", expr="amount", label="Revenue"),
     )
     assert _view(build, "order_items").metrics == (
         MetricSpec(table="order_items", name="items_sold", agg="sum", expr="quantity"),
