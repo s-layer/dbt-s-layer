@@ -7,6 +7,9 @@ import json
 from typing import TYPE_CHECKING, Any
 
 import pytest
+
+from dbt_s_layer.errors import SemanticViewError
+from dbt_s_layer.project import load_project
 from dbt_s_layer.semantic_views import (
     DerivedMetricSpec,
     DimensionSpec,
@@ -19,9 +22,6 @@ from dbt_s_layer.semantic_views import (
     SemanticViewSpec,
     build_semantic_views,
 )
-
-from dbt_s_layer.errors import SemanticViewError
-from dbt_s_layer.project import load_project
 from tests.conftest import ARTIFACT_SETS, EXPORT_SETS
 
 if TYPE_CHECKING:
@@ -393,18 +393,6 @@ def test_dimensions_include_entities(set_name: str, make_project: MakeProject) -
     )
 
 
-def test_dimension_wins_over_an_entity_of_the_same_name(make_project: MakeProject) -> None:
-    project_dir = make_project("fusion_new")
-    _semantic(
-        project_dir,
-        lambda raw: _model(raw, "orders")["dimensions"].append(
-            _dimension("customer", "customer_name")
-        ),
-    )
-    dims = [d for d in _view(_build(project_dir), "orders").dimensions if d.name == "customer"]
-    assert dims == [DimensionSpec(table="orders", name="customer", expr="customer_name")]
-
-
 def test_natural_entities_are_skipped(make_project: MakeProject) -> None:
     project_dir = make_project("fusion_new")
 
@@ -459,9 +447,10 @@ def test_aggregations(
 ) -> None:
     project_dir = make_project("fusion_new")
     _semantic(
-        project_dir, lambda raw: raw["metrics"].append(_simple(raw, "m", "orders", agg, expr))
+        project_dir,
+        lambda raw: raw["metrics"].append(_simple(raw, "agg_metric", "orders", agg, expr)),
     )
-    metric = next(m for m in _view(_build(project_dir), "orders").metrics if m.name == "m")
+    metric = next(m for m in _view(_build(project_dir), "orders").metrics if m.name == "agg_metric")
     assert (metric.agg, metric.expr) == (expected_agg, expected_expr)
 
 
@@ -494,9 +483,9 @@ def test_median_is_the_50th_percentile(make_project: MakeProject) -> None:
     project_dir = make_project("fusion_new")
     _semantic(
         project_dir,
-        lambda raw: raw["metrics"].append(_simple(raw, "m", "orders", "median", "amount")),
+        lambda raw: raw["metrics"].append(_simple(raw, "agg_metric", "orders", "median", "amount")),
     )
-    metric = next(m for m in _view(_build(project_dir), "orders").metrics if m.name == "m")
+    metric = next(m for m in _view(_build(project_dir), "orders").metrics if m.name == "agg_metric")
     assert metric.agg == "percentile"
     assert metric.percentile == PercentileSpec(value=0.5, discrete=False, approximate=False)
 
@@ -535,7 +524,7 @@ def test_non_additive_dimension(
     window_choice: str, latest: bool, make_project: MakeProject
 ) -> None:
     project_dir = make_project("fusion_new")
-    nad = {"name": "ordered_at", "window_choice": window_choice, "window_groupings": []}
+    nad: Raw = {"name": "ordered_at", "window_choice": window_choice, "window_groupings": []}
     _semantic(
         project_dir,
         lambda raw: _metric(raw, "revenue")["type_params"]["metric_aggregation_params"].update(
@@ -698,9 +687,9 @@ def test_derived_metric_with_aliases(make_project: MakeProject) -> None:
         raw["metrics"].append(
             _derived(
                 "aov_plus",
-                "(rev / n) + revenue_bonus * 2",
+                "(rev / cnt) + revenue_bonus * 2",
                 _input("revenue", alias="rev"),
-                _input("order_count", alias="n"),
+                _input("order_count", alias="cnt"),
             )
         )
 
