@@ -68,7 +68,8 @@ Semantic model features v1 leaves out of semantic views (each is skipped with a 
 - **SEMVW-V2-06**: Non-additive dimensions with `window_groupings` (MetricFlow takes the last rows per entity, Snowflake per queried dimensions)
 - **SEMVW-V2-07**: Natural entities and validity windows (SCD type 2), e.g. through `ASOF` relationships
 - **SEMVW-V2-08**: Derived and ratio metrics with offsets, filters, inputs from more than one semantic model, or derived inputs; and more than one join path to a table (Snowflake `USING`, a preview feature)
-- **SEMVW-V2-09**: `fill_nulls_with` / `join_to_timespine` on metrics (ignored today) and approximate discrete percentiles (skipped today)
+- **SEMVW-V2-09**: `fill_nulls_with` / `join_to_timespine` on metrics (ignored today) and approximate percentiles the warehouse has no function for (discrete on Snowflake, continuous on Databricks; skipped today)
+- **SEMVW-V2-10**: Databricks dimensions of a joined semantic model whose `expr` is not a plain column (needs the join's `source` to be a SQL query that computes them; skipped today)
 
 ### Tooling
 
@@ -102,7 +103,7 @@ Semantic model features v1 leaves out of semantic views (each is skipped with a 
 | EXPRT-05 | Phase 2 | Complete |
 | SEMVW-01 | Phase 4 | Complete (Snowflake; Databricks and DuckDB in Phases 6, 7) |
 | SEMVW-02 | Phase 4 | Complete |
-| SEMVW-03 | Phase 6 | Pending |
+| SEMVW-03 | Phase 6 | Implemented; real-workspace smoke test pending |
 | SEMVW-04 | Phase 7 | Pending |
 | SEMVW-05 | Phase 4 | Complete |
 | OUTPT-01 | Phase 3 | Complete |
