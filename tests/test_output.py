@@ -473,3 +473,50 @@ def test_different_relations_do_not_clash(
     project_dir = make_project("core_export")
     _add_node(project_dir, "user_model", **fields)
     assert list(_render_into(project_dir)) == [SCHEMA_FILE, *EXPORT_FILES]
+
+
+# --- review round 1 -----------------------------------------------------------
+
+
+def test_user_model_in_the_output_dir_still_clashes(make_project: MakeProject) -> None:
+    # Only dbt-s-layer's own files there are earlier output; the user's are checked.
+    project_dir = make_project("core_export")
+    _add_node(
+        project_dir,
+        "revenue",
+        alias="REVENUE_DAILY",
+        original_file_path="models/semantic/revenue.sql",
+        config={"schema": "reporting"},
+    )
+    with pytest.raises(ModelClashError, match=r"model\.fx\.revenue.*alias 'revenue_daily'"):
+        _render_into(project_dir)
+
+
+@pytest.mark.parametrize("fail_at", [1, 2, 4, 7, 12])
+def test_failure_while_moving_restores_the_directory(
+    fail_at: int, make_project: MakeProject, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Every move (old file out, new file in, stale file out) is undone on failure.
+    files = _files(make_project)
+    out = tmp_path / "out"
+    stale = {"exp__old__gone.sql": files[EXPORT_FILES[0]]}
+    apply_output({**files, **stale}, out)
+    (out / "README.md").write_text("mine\n")
+    before = {p.name: p.read_bytes() for p in out.iterdir()}
+    changed = {name: text + "-- v2\n" for name, text in files.items()}
+    changed["exp__new__one.sql"] = files[EXPORT_FILES[1]]
+
+    real = os.replace
+    calls: list[int] = []
+
+    def flaky(src: str | os.PathLike[str], dst: str | os.PathLike[str]) -> None:
+        calls.append(1)
+        if len(calls) == fail_at:
+            raise OSError("device busy")
+        real(src, dst)
+
+    monkeypatch.setattr(output.os, "replace", flaky)
+    with pytest.raises(OSError, match="device busy"):
+        apply_output(changed, out)
+    assert {p.name: p.read_bytes() for p in out.iterdir()} == before
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["core_export", "out"]
