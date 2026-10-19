@@ -32,6 +32,7 @@ _YAML_SUFFIXES = (".yml", ".yaml")
 _SEMANTIC_KEY_RE = re.compile(
     rb"^[ \t]*(?:-[ \t]+)?(?:semantic_models?|metrics|saved_queries)[ \t]*:", re.MULTILINE
 )
+_PROFILE_KEY_RE = re.compile(rb"^profile[ \t]*:", re.MULTILINE)
 _PARSE_OUTPUT_LINES = 30
 
 
@@ -72,14 +73,32 @@ def _absolute(path: Path, cwd: Path) -> Path:
     return Path(os.path.normpath(cwd / path))
 
 
+def _names_profile(project_file: Path) -> bool:
+    try:
+        return _PROFILE_KEY_RE.search(project_file.read_bytes()) is not None
+    except OSError:
+        return False
+
+
 def _nearest_project(path: Path, stop: Path) -> Path | None:
-    """The closest directory above `path` with a dbt_project.yml, not looking above `stop`."""
+    """
+    The dbt project above `path`, not looking above `stop`.
+
+    That is the closest directory with a dbt_project.yml that names a `profile:`. A
+    dbt_project.yml without one is a package (a local package, say), which cannot be
+    parsed on its own and whose semantic models reach the project that installs it.
+    With no such directory, the closest dbt_project.yml.
+    """
+    nearest: Path | None = None
     for directory in (path.parent, *path.parent.parents):
-        if (directory / PROJECT_FILE).is_file():
-            return directory
+        project_file = directory / PROJECT_FILE
+        if project_file.is_file():
+            if _names_profile(project_file):
+                return directory
+            nearest = nearest or directory
         if directory == stop:
             break
-    return None
+    return nearest
 
 
 def _triggers(path: Path, project: Path, output_dir: Path) -> bool:
