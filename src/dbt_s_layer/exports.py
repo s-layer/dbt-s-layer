@@ -152,10 +152,15 @@ def _materialized(
     value is taken from the rendered config instead.
     """
     entries = [entry for entry in dbt_sq.exports if entry.name == export.name]
-    if len(entries) != 1:
+    if len(entries) > 1:
+        raise ExportRenderError(
+            f"saved query {dbt_sq.name!r} has more than one export named {export.name!r}. "
+            "Rename one of them."
+        )
+    if not entries:
         raise ExportRenderError(
             f"export {export.name!r} of saved query {dbt_sq.name!r} is in "
-            "semantic_manifest.json but not exactly once in manifest.json. Re-run `dbt parse`."
+            "semantic_manifest.json but not in manifest.json. Re-run `dbt parse`."
         )
     unrendered = entries[0].unrendered_config
     rendered = {
@@ -239,7 +244,8 @@ def render_exports(
         ) from exc
 
     models: dict[str, ExportModel] = {}
-    # (schema, lowercased alias) -> model: dbt refuses two models on one relation.
+    # (schema, alias), lowercased like dbt's own check -> model: dbt refuses two
+    # models on one relation.
     relations: dict[tuple[str | None, str], ExportModel] = {}
     for saved_query in sorted(table.manifest.saved_queries, key=lambda sq: sq.name):
         if not saved_query.exports:
@@ -272,7 +278,8 @@ def render_exports(
                     f"saved query {other.saved_query!r} and export {model.export!r} of saved "
                     f"query {model.saved_query!r}. Rename one of them."
                 )
-            relation = (model.schema, model.alias.lower())
+            schema = model.schema.lower() if model.schema is not None else None
+            relation = (schema, model.alias.lower())
             other = relations.get(relation)
             if other is not None:
                 where = f"schema {model.schema!r}" if model.schema else "the target schema"
