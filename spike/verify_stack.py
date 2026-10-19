@@ -7,10 +7,13 @@ Commits a snapshot of what Phase 0 found so later phases can trust pins.
 This script is import-only — it does NOT parse a real manifest, run dbtf,
 or talk to the network. It verifies:
 
-1. Resolved versions of metricflow, metricflow-semantics, dbt-semantic-interfaces, pydantic
+1. Resolved versions of metricflow and pydantic (the only distributions we pin)
 2. That key import paths we rely on in later phases still exist:
-   - dbt_semantic_interfaces.implementations.semantic_manifest.PydanticSemanticManifest
+   - metricflow_semantic_interfaces.implementations.semantic_manifest.PydanticSemanticManifest
    - metricflow_semantics.sql.sql_table.SqlTable (+ from_string classmethod)
+   - metricflow.engine.metricflow_engine.MetricFlowEngine (+ explain method)
+   Both bundled namespaces ship inside the metricflow wheel; they have no
+   distribution metadata of their own, so they are checked by import only.
 3. Whether PydanticSemanticManifest uses pydantic v1 or v2 semantics
    (model_fields vs __fields__) — cascades to our compat shim strategy
 """
@@ -37,7 +40,7 @@ def probe() -> int:
     print()
 
     print("--- Resolved package versions ---")
-    for pkg in ("metricflow", "metricflow-semantics", "dbt-semantic-interfaces", "pydantic"):
+    for pkg in ("metricflow", "pydantic"):
         try:
             print(f"  {pkg}: {meta.version(pkg)}")
         except meta.PackageNotFoundError:
@@ -48,7 +51,7 @@ def probe() -> int:
     print("--- Import-surface checks ---")
 
     try:
-        from dbt_semantic_interfaces.implementations.semantic_manifest import (
+        from metricflow_semantic_interfaces.implementations.semantic_manifest import (
             PydanticSemanticManifest,
         )
 
@@ -65,6 +68,14 @@ def probe() -> int:
         print(f"  SqlTable.from_string: OK -> {SqlTable.from_string!r}")
     except ImportError as exc:
         print(f"  SqlTable: FAIL -> {exc}")
+        exit_code = 1
+
+    try:
+        from metricflow.engine.metricflow_engine import MetricFlowEngine
+
+        print(f"  MetricFlowEngine.explain: OK -> {MetricFlowEngine.explain!r}")
+    except ImportError as exc:
+        print(f"  MetricFlowEngine: FAIL -> {exc}")
         exit_code = 1
 
     print()

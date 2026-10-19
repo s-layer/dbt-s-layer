@@ -2,12 +2,6 @@ version = 1
 revision = 3
 requires-python = ">=3.11"
 
-[options]
-prerelease-mode = "allow"
-
-[manifest]
-overrides = [{ name = "metricflow", marker = "python_full_version >= '3.10' and python_full_version < '3.15'" }]
-
 [[package]]
 name = "annotated-doc"
 version = "0.0.4"
@@ -177,8 +171,7 @@ name = "dbt-s-layer"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
-    { name = "dbt-semantic-interfaces" },
-    { name = "metricflow", marker = "python_full_version < '3.15'" },
+    { name = "metricflow" },
     { name = "pydantic" },
     { name = "typer" },
 ]
@@ -193,8 +186,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "dbt-semantic-interfaces", specifier = "==0.9.4.dev0" },
-    { name = "metricflow", specifier = "==0.209.0" },
+    { name = "metricflow", specifier = "==0.213.0" },
     { name = "pydantic", specifier = ">=2.7,<3" },
     { name = "typer", specifier = ">=0.24.1" },
 ]
@@ -205,35 +197,6 @@ dev = [
     { name = "pytest", specifier = ">=8.0.0" },
     { name = "pytest-cov", specifier = ">=6.0.0" },
     { name = "ruff", specifier = ">=0.15.1" },
-]
-
-[[package]]
-name = "dbt-semantic-interfaces"
-version = "0.9.4.dev0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "click" },
-    { name = "importlib-metadata" },
-    { name = "jinja2" },
-    { name = "jsonschema" },
-    { name = "more-itertools" },
-    { name = "pydantic" },
-    { name = "python-dateutil" },
-    { name = "pyyaml" },
-    { name = "typing-extensions" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/ec/28/32c1f9ebf3841e8e2809463f2ccf6e407f9a5766a17bb59cd320a1ec1521/dbt_semantic_interfaces-0.9.4.dev0.tar.gz", hash = "sha256:0891fa94ced32133481435ec8d31a41b0c261f707fc51514a0861b069898515d", size = 105591, upload-time = "2025-10-08T19:42:07.319Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/39/22/326152c9061981b76307553c48cce63ec2584c6bf742bd39aa55914009ab/dbt_semantic_interfaces-0.9.4.dev0-py3-none-any.whl", hash = "sha256:8710f2dc953087d8e37528442fc5f3e766ba5310fd520c0d61eedd33076aad38", size = 162307, upload-time = "2025-10-08T19:42:02.587Z" },
-]
-
-[[package]]
-name = "graphviz"
-version = "0.20.3"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/fa/83/5a40d19b8347f017e417710907f824915fba411a9befd092e52746b63e9f/graphviz-0.20.3.zip", hash = "sha256:09d6bc81e6a9fa392e7ba52135a9d49f1ed62526f96499325930e87ca1b5925d", size = 256455, upload-time = "2024-03-21T07:50:45.772Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/00/be/d59db2d1d52697c6adc9eacaf50e8965b6345cc143f671e1ed068818d5cf/graphviz-0.20.3-py3-none-any.whl", hash = "sha256:81f848f2904515d8cd359cc611faba817598d2feaac4027b266aa3eda7b3dde5", size = 47126, upload-time = "2024-03-21T07:50:43.091Z" },
 ]
 
 [[package]]
@@ -393,22 +356,25 @@ wheels = [
 
 [[package]]
 name = "metricflow"
-version = "0.209.0"
+version = "0.213.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "dbt-semantic-interfaces" },
-    { name = "graphviz" },
+    { name = "importlib-metadata" },
     { name = "jinja2" },
+    { name = "jsonschema" },
     { name = "more-itertools" },
     { name = "pydantic" },
     { name = "python-dateutil" },
+    { name = "pyyaml" },
     { name = "rapidfuzz" },
+    { name = "referencing" },
+    { name = "sqlglot" },
     { name = "tabulate" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/4b/d3/cf47af37c2109738fe69abb803b5301726b4e923ecd1758834e28147a4e9/metricflow-0.209.0.tar.gz", hash = "sha256:58187952eb2e96f0c33b4ceea2701572555fabf435eea44ca24fcba7fb4c53f9", size = 709423, upload-time = "2025-10-14T16:07:41.908Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/a6/ae/0c75d87f004cd56f30862fa1330f6a4e36a26ea32463a6d17d5d1ab32413/metricflow-0.213.0.tar.gz", hash = "sha256:e6b5e8f05a0b9b0183430416052a61747fc89f809c39f2cdc5a3d9ba7a3f6931", size = 643641, upload-time = "2026-09-10T19:24:20.562Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/a8/4c/58eb89edb3f4535b98de0366d15efc74069feae7ec32271a3939ab9348af/metricflow-0.209.0-py3-none-any.whl", hash = "sha256:1bebde4638b054157c06fc10700e85ff7a7bf775e3cde24922c7b437a445204b", size = 979253, upload-time = "2025-10-14T16:07:39.929Z" },
+    { url = "https://files.pythonhosted.org/packages/58/6c/2ec7e3c433bdab3cf15f4424769794f6d0dab9ecd3c43da00cdb85435d44/metricflow-0.213.0-py3-none-any.whl", hash = "sha256:6e1865535a200607529970f6ca1a9fcd22b7814d0b71cd654d9ee01eecf0157b", size = 999530, upload-time = "2026-09-10T19:24:17.846Z" },
 ]
 
 [[package]]
@@ -932,6 +898,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/94/e7/b2c673351809dca68a0e064b6af791aa332cf192da575fd474ed7d6f16a2/six-1.17.0.tar.gz", hash = "sha256:ff70335d468e7eb6ec65b95b99d3a2836546063f63acc5171de367e834932a81", size = 34031, upload-time = "2024-12-04T17:35:28.174Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/b7/ce/149a00dd41f10bc29e5921b496af8b574d8413afcd5e30dfa0ed46c2cc5e/six-1.17.0-py2.py3-none-any.whl", hash = "sha256:4721f391ed90541fddacab5acf947aa0d3dc7d27b2e1e8eda2be8970586c3274", size = 11050, upload-time = "2024-12-04T17:35:26.475Z" },
+]
+
+[[package]]
+name = "sqlglot"
+version = "30.23.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/0c/40/4afe7d21cdf3dbb5a7529ea33a0e07055081fb3d37bc0550e7c2278d6ec0/sqlglot-30.23.0.tar.gz", hash = "sha256:34b5b62fa4cbf042ee6b9e829236577b2f8db4538dd20007de2aa5383c92e845", size = 6108071, upload-time = "2026-10-14T21:48:38.209Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/2d/73/9e749f3e57ca471bf663eb6d51fbe79b9921c5b7376706cd1cac999c8e2e/sqlglot-30.23.0-py3-none-any.whl", hash = "sha256:b5a645722cb4c6b649e9131b94830d9df9a557e87be63713179d848320f2baa1", size = 783709, upload-time = "2026-10-14T21:48:36.327Z" },
 ]
 
 [[package]]
