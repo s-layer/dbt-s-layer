@@ -111,7 +111,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Requirements**: HOOK-01, HOOK-02
 **Success Criteria** (what must be TRUE):
   1. A project that adds the `dbt-s-layer` hook to `.pre-commit-config.yaml` automatically regenerates files when any YAML containing `semantic_models:`, `metrics:`, or `saved_queries:` keys is modified
-  2. The hook completes in under 5 seconds on a fixture project with 100 semantic models and 50 exports
+  2. The hook completes within 5 seconds with dbt Fusion on a project with up to 100 semantic models and 50 exports; with dbt Core the hook is bounded by Core's own `dbt parse` time (documented in README)
   3. The hook is deterministic: running it twice in a row makes no further changes (exits clean)
 **Plans**: 3 plans
 - [x] 05-01-PLAN.md — Export rendering speed: one engine set-up, fresh planner per saved query, process pool

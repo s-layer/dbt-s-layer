@@ -46,7 +46,7 @@
 ### Pre-commit Hook
 
 - [x] **HOOK-01**: Package ships a `.pre-commit-hooks.yaml` defining a `dbt-s-layer` hook that runs `dbt-s-layer generate` on changes to files containing `semantic_models:`, `metrics:`, or `saved_queries:` YAML keys
-- [x] **HOOK-02**: Pre-commit hook completes within 5 seconds on a project with up to 100 semantic models and 50 exports
+- [x] **HOOK-02**: Pre-commit hook completes within 5 seconds with dbt Fusion on a project with up to 100 semantic models and 50 exports; with dbt Core the hook is bounded by Core's own `dbt parse` time (documented in README)
 
 ## v2 Requirements
 
