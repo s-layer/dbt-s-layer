@@ -598,3 +598,71 @@ def build_semantic_views(project: SemanticProject) -> SemanticViewBuild:
     builder = _Builder(project)
     views = tuple(builder.view(name) for name in sorted(builder.models))
     return SemanticViewBuild(views=views, warnings=tuple(sorted(builder.warnings)))
+
+
+# --- models for the output directory ------------------------------------------------
+
+
+@dataclass(frozen=True)
+class SemanticViewModel:
+    """One generated semantic view model: where it goes and what it says."""
+
+    semantic_model: str
+    # sem__<semantic_model>.sql
+    file_name: str
+    # The model name, so the relation is never the semantic model's own table.
+    alias: str
+    # Generated models set no schema: the output folder's `+schema` applies.
+    schema: str | None
+    description: str | None
+    # `{{ config(...) }}`, a blank line, the clauses, and a final newline.
+    body: str
+
+
+@dataclass(frozen=True)
+class SemanticViewResult:
+    """The semantic view models of a project, sorted by file name, and its warnings."""
+
+    models: tuple[SemanticViewModel, ...]
+    warnings: tuple[str, ...]
+
+
+def render_semantic_views(project: SemanticProject, *, adapter: str) -> SemanticViewResult:
+    """Render a semantic view model per semantic model for `adapter`, or warn it has none yet."""
+    from dbt_s_layer import snowflake
+
+    if not project.semantic_manifest.semantic_models:
+        return SemanticViewResult(models=(), warnings=())
+    renderers = {"snowflake": snowflake.render_snowflake}
+    render = renderers.get(adapter)
+    if render is None:
+        return SemanticViewResult(
+            models=(),
+            warnings=(
+                f"semantic views: not generated for adapter {adapter!r} yet; only exports "
+                "were generated.",
+            ),
+        )
+    build = build_semantic_views(project)
+    models = tuple(
+        SemanticViewModel(
+            semantic_model=view.name,
+            file_name=f"sem__{view.name}.sql",
+            alias=f"sem__{view.name}",
+            schema=None,
+            description=view.comment,
+            body=render(view),
+        )
+        for view in build.views
+    )
+    warnings = set(build.warnings)
+    if (
+        adapter == "snowflake"
+        and snowflake.MATERIALIZATION_MACRO not in project.dbt_manifest.macros
+    ):
+        warnings.add(
+            f"semantic views: the {snowflake.PACKAGE} package is not installed (manifest.json "
+            f"has no {snowflake.MATERIALIZATION_MACRO}). Add Snowflake-Labs/{snowflake.PACKAGE} "
+            "to packages.yml and run `dbt deps`; until then `dbt run` fails on the sem__ models."
+        )
+    return SemanticViewResult(models=models, warnings=tuple(sorted(warnings)))

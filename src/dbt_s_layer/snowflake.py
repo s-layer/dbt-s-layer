@@ -33,25 +33,127 @@ CONFIG = "{{ config(materialized='semantic_view', static_analysis='off') }}"
 
 # https://docs.snowflake.com/en/sql-reference/reserved-keywords (fetched 2026-10-19).
 RESERVED_WORDS = frozenset(
-    """
-    ACCOUNT ALL ALTER AND ANY AS BETWEEN BY CASE CAST CHECK COLUMN CONNECT CONNECTION
-    CONSTRAINT CREATE CROSS CURRENT CURRENT_DATE CURRENT_TIME CURRENT_TIMESTAMP CURRENT_USER
-    DATABASE DELETE DISTINCT DROP ELSE EXISTS FALSE FOLLOWING FOR FROM FULL GRANT GROUP
-    GSCLUSTER HAVING ILIKE IN INCREMENT INNER INSERT INTERSECT INTO IS ISSUE JOIN LATERAL LEFT
-    LIKE LOCALTIME LOCALTIMESTAMP MINUS NATURAL NOT NULL OF ON OR ORDER ORGANIZATION QUALIFY
-    REGEXP REVOKE RIGHT RLIKE ROW ROWS SAMPLE SCHEMA SELECT SET SOME START TABLE TABLESAMPLE
-    THEN TO TRIGGER TRUE TRY_CAST UNION UNIQUE UPDATE USING VALUES VIEW WHEN WHENEVER WHERE
-    WINDOW WITH
-    """.split()
+    [
+        "ACCOUNT",
+        "ALL",
+        "ALTER",
+        "AND",
+        "ANY",
+        "AS",
+        "BETWEEN",
+        "BY",
+        "CASE",
+        "CAST",
+        "CHECK",
+        "COLUMN",
+        "CONNECT",
+        "CONNECTION",
+        "CONSTRAINT",
+        "CREATE",
+        "CROSS",
+        "CURRENT",
+        "CURRENT_DATE",
+        "CURRENT_TIME",
+        "CURRENT_TIMESTAMP",
+        "CURRENT_USER",
+        "DATABASE",
+        "DELETE",
+        "DISTINCT",
+        "DROP",
+        "ELSE",
+        "EXISTS",
+        "FALSE",
+        "FOLLOWING",
+        "FOR",
+        "FROM",
+        "FULL",
+        "GRANT",
+        "GROUP",
+        "GSCLUSTER",
+        "HAVING",
+        "ILIKE",
+        "IN",
+        "INCREMENT",
+        "INNER",
+        "INSERT",
+        "INTERSECT",
+        "INTO",
+        "IS",
+        "ISSUE",
+        "JOIN",
+        "LATERAL",
+        "LEFT",
+        "LIKE",
+        "LOCALTIME",
+        "LOCALTIMESTAMP",
+        "MINUS",
+        "NATURAL",
+        "NOT",
+        "NULL",
+        "OF",
+        "ON",
+        "OR",
+        "ORDER",
+        "ORGANIZATION",
+        "QUALIFY",
+        "REGEXP",
+        "REVOKE",
+        "RIGHT",
+        "RLIKE",
+        "ROW",
+        "ROWS",
+        "SAMPLE",
+        "SCHEMA",
+        "SELECT",
+        "SET",
+        "SOME",
+        "START",
+        "TABLE",
+        "TABLESAMPLE",
+        "THEN",
+        "TO",
+        "TRIGGER",
+        "TRUE",
+        "TRY_CAST",
+        "UNION",
+        "UNIQUE",
+        "UPDATE",
+        "USING",
+        "VALUES",
+        "VIEW",
+        "WHEN",
+        "WHENEVER",
+        "WHERE",
+        "WINDOW",
+        "WITH",
+    ]
 )
 # Words of the CREATE SEMANTIC VIEW grammar. Quoting them costs nothing (a quoted
 # upper-case name is the name Snowflake folds an unquoted one to) and keeps an
 # element named `comment` or `metrics` from reading as a keyword.
 _DDL_WORDS = frozenset(
-    """
-    ADDITIVE ASC ASOF COMMENT DESC DIMENSIONS FACTS KEY LABELS METRICS NON NULLS PRIMARY
-    PRIVATE PUBLIC REFERENCES RELATIONSHIPS SYNONYMS TABLES TAG
-    """.split()
+    [
+        "ADDITIVE",
+        "ASC",
+        "ASOF",
+        "COMMENT",
+        "DESC",
+        "DIMENSIONS",
+        "FACTS",
+        "KEY",
+        "LABELS",
+        "METRICS",
+        "NON",
+        "NULLS",
+        "PRIMARY",
+        "PRIVATE",
+        "PUBLIC",
+        "REFERENCES",
+        "RELATIONSHIPS",
+        "SYNONYMS",
+        "TABLES",
+        "TAG",
+    ]
 )
 
 # Keywords inside expressions that the reserved list leaves out: `CASE ... END` is no
@@ -78,7 +180,7 @@ def quote_identifier(name: str) -> str:
 
 
 def sql_string(text: str) -> str:
-    """Return a Snowflake single-quoted string literal for `text`, newlines as `\\n`."""
+    """Return a Snowflake single-quoted string literal for `text`, newlines escaped."""
     escaped = text.replace("\\", "\\\\").replace("'", "''")
     escaped = escaped.replace("\r\n", "\\n").replace("\r", "\\n").replace("\n", "\\n")
     return f"'{escaped}'"
@@ -164,11 +266,9 @@ def _references(expr: str, table: str) -> set[str]:
     for token in tokens:
         if not token.identifier:
             continue
-        if not token.call and token.text.upper() not in _EXPRESSION_KEYWORDS:
-            if not token.qualified:
-                names.add(token.text.lower())
-            elif previous is not None and previous.lower() == table:
-                names.add(token.text.lower())
+        same_table = not token.qualified or (previous is not None and previous.lower() == table)
+        if same_table and not token.call and token.text.upper() not in _EXPRESSION_KEYWORDS:
+            names.add(token.text.lower())
         previous = token.text
     return names
 
@@ -190,9 +290,7 @@ def check_name_shadowing(spec: SemanticViewSpec) -> None:
     for table in spec.tables:
         # (kind, name, expr, the expr as the DDL shows it)
         elements: list[tuple[str, str, str, str]] = [
-            ("dimension", d.name, d.expr, d.expr)
-            for d in spec.dimensions
-            if d.table == table.alias
+            ("dimension", d.name, d.expr, d.expr) for d in spec.dimensions if d.table == table.alias
         ]
         elements += [
             ("metric", m.name, m.expr, _SIMPLE_AGGREGATIONS.get(m.agg, "{}").format(m.expr))

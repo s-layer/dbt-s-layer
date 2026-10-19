@@ -163,6 +163,19 @@ def _check_project(project_dir: Path) -> int:
     print(f"OK  artifacts: fresh ({result.project.producer})", file=sys.stdout)
     for warning in result.warnings:
         print(f"WARN {warning}", file=sys.stdout)
+    manifest = result.project.dbt_manifest
+    if manifest.metadata.adapter_type == "snowflake":
+        from dbt_s_layer import snowflake
+
+        if snowflake.MATERIALIZATION_MACRO in manifest.macros:
+            print(f"OK  {snowflake.PACKAGE}: installed", file=sys.stdout)
+        else:
+            print(
+                f"WARN {snowflake.PACKAGE}: not installed, so `dbt run` fails on the generated "
+                f"sem__ models. Add Snowflake-Labs/{snowflake.PACKAGE} to packages.yml and run "
+                "`dbt deps`.",
+                file=sys.stdout,
+            )
     return 0
 
 

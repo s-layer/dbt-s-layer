@@ -15,6 +15,7 @@ from dbt_s_layer.errors import ModelClashError, OutputConflictError, SentinelCol
 from dbt_s_layer.output import (
     SCHEMA_FILE,
     OutputDiff,
+    RenderedOutput,
     apply_output,
     diff_output,
     render_output,
@@ -78,7 +79,7 @@ def _semantic(project_dir: Path, mutate: Callable[[dict[str, Any]], None]) -> No
     path.write_text(json.dumps(raw))
 
 
-def _files(make_project: MakeProject, set_name: str = "core_export") -> dict[str, str]:
+def _files(make_project: MakeProject, set_name: str = "core_export") -> RenderedOutput:
     return render_output(load_project(make_project(set_name)))
 
 
@@ -396,7 +397,7 @@ def _add_node(project_dir: Path, name: str, **fields: Any) -> None:
     path.write_text(json.dumps(raw))
 
 
-def _render_into(project_dir: Path) -> dict[str, str]:
+def _render_into(project_dir: Path) -> RenderedOutput:
     return render_output(load_project(project_dir), output_dir=project_dir / "models" / "semantic")
 
 
@@ -720,7 +721,7 @@ def test_semantic_view_bodies_are_postflighted(make_project: MakeProject) -> Non
         render_output(load_project(project_dir))
 
 
-def _render_snowflake_into(project_dir: Path) -> dict[str, str]:
+def _render_snowflake_into(project_dir: Path) -> RenderedOutput:
     return render_output(
         load_project(project_dir),
         adapter="snowflake",
