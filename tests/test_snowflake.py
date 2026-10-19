@@ -248,6 +248,85 @@ def test_ratio_metric() -> None:
     ) in body
 
 
+# --- trailing line comments (review round 1) ----------------------------------------
+# An expr is pasted inline, so a trailing `-- comment` would swallow what follows it on
+# the line: the `,` between elements, the closing paren of an aggregate, the COMMENT.
+
+
+def test_dimension_ending_in_a_line_comment_is_terminated() -> None:
+    big = DimensionSpec(
+        table="orders", name="big", expr="amount > 100 -- big orders", comment="Big."
+    )
+    body = _body(_view(dimensions=(big, ORDERED_AT)))
+    assert "  orders.big AS amount > 100 -- big orders\n COMMENT = 'Big.',\n" in body
+
+
+def test_dimension_ending_in_a_line_comment_keeps_its_comma() -> None:
+    big = DimensionSpec(table="orders", name="big", expr="amount > 100 -- big orders")
+    body = _body(_view(dimensions=(big, ORDERED_AT)))
+    assert "  orders.big AS amount > 100 -- big orders\n,\n  orders.ordered_at" in body
+
+
+@pytest.mark.parametrize(
+    ("agg", "sql"),
+    [
+        ("sum", "SUM(amount -- gross\n)"),
+        ("count_distinct", "COUNT(DISTINCT amount -- gross\n)"),
+        ("sum_boolean", "SUM(CASE WHEN amount -- gross\n THEN 1 ELSE 0 END)"),
+    ],
+)
+def test_aggregate_over_a_line_comment_is_terminated(agg: Aggregation, sql: str) -> None:
+    metric = replace(REVENUE, agg=agg, expr="amount -- gross")
+    assert f"  orders.revenue AS {sql}\n)" in _body(_view(metrics=(metric,)))
+
+
+@pytest.mark.parametrize(
+    ("discrete", "approximate", "sql"),
+    [
+        (False, False, "PERCENTILE_CONT(0.9) WITHIN GROUP (ORDER BY amount -- gross\n)"),
+        (False, True, "APPROX_PERCENTILE(amount -- gross\n, 0.9)"),
+    ],
+)
+def test_percentile_over_a_line_comment_is_terminated(
+    discrete: bool, approximate: bool, sql: str
+) -> None:
+    metric = replace(
+        REVENUE,
+        expr="amount -- gross",
+        agg="percentile",
+        percentile=PercentileSpec(value=0.9, discrete=discrete, approximate=approximate),
+    )
+    assert f"  orders.revenue AS {sql}\n)" in _body(_view(metrics=(metric,)))
+
+
+def test_derived_metric_ending_in_a_line_comment_is_terminated() -> None:
+    derived = DerivedMetricSpec(
+        name="twice",
+        parts=(MetricRef("orders", "revenue"), " * 2 -- doubled"),
+        comment="Twice.",
+    )
+    body = _body(_view(derived_metrics=(derived,)))
+    assert "  twice AS orders.revenue * 2 -- doubled\n COMMENT = 'Twice.'\n)" in body
+
+
+@pytest.mark.parametrize(
+    "expr",
+    [
+        "amount /* gross */",  # a block comment ends itself
+        "CASE WHEN note = '-- x' THEN 1 END",  # `--` in a string literal
+        'CASE WHEN "a--b" THEN 1 END',  # `--` in a quoted identifier
+        "amount -- gross\n",  # already ends the line
+        "amount - -1",  # two minus signs, not a comment
+    ],
+)
+def test_exprs_without_a_trailing_line_comment_are_unchanged(expr: str) -> None:
+    dimension = DimensionSpec(table="orders", name="x", expr=expr, comment="X.")
+    body = _body(_view(dimensions=(dimension,)))
+    assert f"  orders.x AS {expr} COMMENT = 'X.'\n" in body
+    metric_body = _body(_view(metrics=(replace(REVENUE, expr=expr),)))
+    assert f"  orders.revenue AS SUM({expr})\n)" in metric_body
+
+
 # --- identifiers and literals ----------------------------------------------------------
 
 
@@ -376,6 +455,68 @@ def test_reserved_words_are_not_references() -> None:
         table="orders", name="revenue", agg="sum", expr="CASE WHEN paid THEN amount END"
     )
     render_snowflake(_view(dimensions=(end,), metrics=(metric,)))
+
+
+# Type names and date parts are not column references (review round 1).
+
+
+@pytest.mark.parametrize(
+    ("name", "other_expr"),
+    [
+        ("date", "DATE_TRUNC(month, ordered_at::date)"),
+        ("date", "ordered_at :: date"),
+        ("date", "CAST(ordered_at AS date)"),
+        ("timestamp", "TRY_CAST(ordered_at AS timestamp)"),
+        ("varchar", "ordered_at::varchar(10)"),
+        ("precision", "amount::double precision"),
+        ("int", "CAST(amount AS int) + 1"),
+    ],
+)
+def test_type_names_are_not_references(name: str, other_expr: str) -> None:
+    element = DimensionSpec(table="orders", name=name, expr="ordered_at::date")
+    other = DimensionSpec(table="orders", name="other", expr=other_expr)
+    render_snowflake(_view(dimensions=(element, other)))
+
+
+@pytest.mark.parametrize(
+    ("name", "other_expr"),
+    [
+        ("month", "DATE_TRUNC(month, ordered_at)"),
+        ("month", "DATE_TRUNC( MONTH , ordered_at)"),
+        ("day", "DATEADD(day, 1, ordered_at)"),
+        ("day", "DATEDIFF(day, ordered_at, shipped_at)"),
+        ("hour", "TIMESTAMPADD(hour, 1, ordered_at)"),
+        ("quarter", "DATE_PART(quarter, ordered_at)"),
+        ("year", "EXTRACT(year FROM ordered_at)"),
+        ("week", "LAST_DAY(ordered_at, week)"),
+        ("week", "DATE_TRUNC(week, DATEADD(day, 1, ordered_at))"),
+    ],
+)
+def test_date_parts_are_not_references(name: str, other_expr: str) -> None:
+    element = DimensionSpec(table="orders", name=name, expr="MONTH(ordered_at)")
+    other = DimensionSpec(table="orders", name="other", expr=other_expr)
+    render_snowflake(_view(dimensions=(element, other)))
+
+
+@pytest.mark.parametrize(
+    "metric_expr",
+    [
+        "year",  # a column, not a date part
+        "DATEADD(day, year, ordered_at)",  # the amount argument is an expression
+        "EXTRACT(month FROM year)",  # so is EXTRACT's operand
+        "CAST(year AS int)",  # and CAST's
+    ],
+)
+def test_a_column_named_like_a_date_part_still_shadows(metric_expr: str) -> None:
+    year = DimensionSpec(table="orders", name="year", expr="EXTRACT(year FROM ordered_at)")
+    metric = MetricSpec(table="orders", name="revenue", agg="max", expr=metric_expr)
+    with pytest.raises(SemanticViewError, match=r"orders\.year"):
+        render_snowflake(_view(dimensions=(year,), metrics=(metric,)))
+
+
+def test_type_names_and_date_parts_are_not_quoted() -> None:
+    for word in ("date", "timestamp", "int", "month", "year", "week"):
+        assert quote_identifier(word) == word
 
 
 def test_other_tables_do_not_shadow() -> None:
