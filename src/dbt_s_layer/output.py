@@ -96,7 +96,7 @@ def _check_clashes(
     """
     Refuse generated models that clash with the user's own nodes.
 
-    Nodes in `output_dir` are earlier dbt-s-layer output and are skipped. A
+    dbt-s-layer's own files in `output_dir` are earlier output and are skipped. A
     relation is compared by custom schema and alias, case-insensitively, which
     is exact whenever generate_schema_name depends only on the custom schema
     (03-RESEARCH finding 3). Nodes that set a database are skipped: exports
@@ -108,7 +108,8 @@ def _check_clashes(
     by_relation: dict[tuple[str | None, str], ModelNode] = {}
     for node in sorted(project.dbt_manifest.nodes.values(), key=lambda n: n.unique_id):
         if node.package_name == root:
-            if (project.project_dir / node.original_file_path).parent.resolve() == output_dir:
+            path = project.project_dir / node.original_file_path
+            if path.parent.resolve() == output_dir and is_owned_name(path.name):
                 continue
             by_name.setdefault(node.name.lower(), node)
         if node.config.database is not None or node.config.target_schema is not None:
@@ -206,23 +207,52 @@ def apply_output(files: Mapping[str, str], output_dir: Path) -> OutputDiff:
     Make `output_dir` match `files` and return what changed.
 
     New and changed files are written to a staging directory beside `output_dir`
-    first, so a failure while writing leaves `output_dir` as it was; each is then
-    moved into place with `os.replace`, and stale owned files are deleted.
-    Unchanged files are not rewritten.
+    first. Then each old file is moved aside into the staging directory and the
+    new one moved into place with `os.replace`, and stale owned files are moved
+    aside too. If any step fails, every move is undone, so `output_dir` is left
+    as it was. Unchanged files are not rewritten.
     """
     diff = diff_output(files, output_dir)
     if diff.clean:
         return diff
+    created = not output_dir.exists()
     output_dir.mkdir(parents=True, exist_ok=True)
     staging = Path(tempfile.mkdtemp(prefix=_STAGING_PREFIX, dir=output_dir.parent))
+    aside = staging / "replaced"
+    # (name, old file moved aside, new file moved in), in the order done.
+    moves: list[tuple[str, bool, bool]] = []
     try:
-        to_write = [*diff.changed, *diff.missing]
+        aside.mkdir()
+        to_write = sorted([*diff.changed, *diff.missing])
         for name in to_write:
             (staging / name).write_bytes(files[name].encode("utf-8"))
-        for name in sorted(to_write):
-            os.replace(staging / name, output_dir / name)
-        for name in diff.stale:
-            (output_dir / name).unlink()
+        try:
+            for name in to_write:
+                had_old = name in diff.changed
+                if had_old:
+                    os.replace(output_dir / name, aside / name)
+                    moves.append((name, True, False))
+                os.replace(staging / name, output_dir / name)
+                if had_old:
+                    moves[-1] = (name, True, True)
+                else:
+                    moves.append((name, False, True))
+            for name in diff.stale:
+                os.replace(output_dir / name, aside / name)
+                moves.append((name, True, False))
+        except BaseException:
+            _undo(moves, output_dir, aside)
+            if created and not any(output_dir.iterdir()):
+                output_dir.rmdir()
+            raise
     finally:
         shutil.rmtree(staging, ignore_errors=True)
     return diff
+
+
+def _undo(moves: list[tuple[str, bool, bool]], output_dir: Path, aside: Path) -> None:
+    for name, had_old, moved_in in reversed(moves):
+        if moved_in:
+            (output_dir / name).unlink()
+        if had_old:
+            os.replace(aside / name, output_dir / name)
