@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import shutil
 from typing import TYPE_CHECKING
 
@@ -87,7 +88,9 @@ def test_doctor_passes_project_dir(monkeypatch: pytest.MonkeyPatch, tmp_path: Pa
 
 def test_doctor_help_lists_project_dir() -> None:
     """`dbt-s-layer doctor --help` documents --project-dir."""
-    assert "--project-dir" in runner.invoke(app, ["doctor", "--help"]).stdout
+    # Rich colours help output in CI and splits the option name with ANSI codes.
+    plain = re.sub(r"\x1b\[[0-9;]*m", "", runner.invoke(app, ["doctor", "--help"]).stdout)
+    assert "--project-dir" in plain
 
 
 def test_doctor_project_dir_end_to_end(tmp_path: Path) -> None:
