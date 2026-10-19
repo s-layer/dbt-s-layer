@@ -440,6 +440,51 @@ def test_an_empty_view_is_refused() -> None:
         render_databricks(_view(dimensions=(), metrics=()))
 
 
+
+def test_a_field_name_with_a_reserved_prefix_is_refused() -> None:
+    # Two hops through an entity named `source` give `order__source__country`, which
+    # holds the `__SOURCE__` placeholder prefix: only this view may be skipped.
+    spec = replace(
+        _three_tables(),
+        relationships=(ITEMS_TO_ORDERS, replace(ORDERS_TO_CUSTOMERS, entity="Source")),
+    )
+    with pytest.raises(SemanticViewError, match="order__Source__country"):
+        render_databricks(spec)
+
+
+def test_a_view_left_empty_by_filtering_is_refused() -> None:
+    unused = replace(REVENUE, private=True)
+    with pytest.raises(SemanticViewError, match="at least one"):
+        render_databricks(_view(dimensions=(), metrics=(unused,)))
+    joined_only = replace(
+        _three_tables(),
+        dimensions=(DimensionSpec(table="orders", name="status", expr="upper(status)"),),
+        metrics=(),
+    )
+    with pytest.raises(SemanticViewError, match="at least one"):
+        render_databricks(joined_only)
+
+
+@pytest.mark.parametrize("char", ["\x85", "\x92", "\u2028", "\u2029", "\ufeff", "\uffff"])
+def test_yaml_string_escapes_what_yaml_would_reject_or_fold(char: str) -> None:
+    text = f"a{char}b"
+    quoted = yaml_string(text)
+    assert char not in quoted
+    assert YAML(typ="safe", pure=True).load(StringIO(quoted)) == text  # pyright: ignore[reportUnknownMemberType]
+
+
+def test_a_column_with_a_dollar_is_quoted() -> None:
+    spec = _view(
+        tables=(ITEMS, ORDERS),
+        relationships=(replace(ITEMS_TO_ORDERS, child_column="order$id"),),
+        dimensions=(DimensionSpec(table="orders", name="status", expr="status$code"),),
+        metrics=(MetricSpec(table="order_items", name="items", agg="sum", expr="qty$total"),),
+    )
+    loaded = _load(_render(spec).body)
+    assert loaded["joins"][0]["on"] == "source.`order$id` = orders.order_id"
+    assert loaded["dimensions"][0]["expr"] == "orders.`status$code`"
+    assert loaded["measures"][0]["expr"] == "SUM(source.`qty$total`)"
+
 # --- snapshots --------------------------------------------------------------------------
 
 
