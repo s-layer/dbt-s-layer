@@ -307,6 +307,43 @@ def test_every_supported_adapter_renders(make_project: MakeProject) -> None:
         assert len(render_exports(project, adapter=adapter)) == len(EXPECTED)
 
 
+# --- reserved words as column names (Snowflake smoke run, review round 2) ------------
+
+ITEMS = "exp__items_by_country__exp_items_by_country.sql"
+# adapter -> how an entity named `order` must appear: quoted, in the case the
+# dialect folds an unquoted name to, so the column keeps the name it would have had.
+QUOTED_ORDER = {
+    "athena": '"order"',
+    "bigquery": "`order`",
+    "databricks": "`order`",
+    "duckdb": '"order"',
+    "postgres": '"order"',
+    "redshift": '"order"',
+    "snowflake": '"ORDER"',
+    "trino": '"order"',
+}
+
+
+@pytest.mark.parametrize("set_name", [*EXPORT_SETS, "core_snowflake", "fusion_snowflake"])
+@pytest.mark.parametrize("adapter", sorted(QUOTED_ORDER))
+def test_a_reserved_entity_name_is_quoted(
+    adapter: str, set_name: str, make_project: MakeProject
+) -> None:
+    # Snowflake: "syntax error ... unexpected 'order'" on `orders_src_10000.order_id AS order`
+    # and `subq_10.order`, because the entity `order` reaches the SQL as a bare name.
+    assert set(QUOTED_ORDER) == set(SUPPORTED_ADAPTERS)
+    project = load_project(make_project(set_name))
+    body = _by_file(render_exports(project, adapter=adapter))[ITEMS].body
+    quoted = QUOTED_ORDER[adapter]
+    assert f"AS {quoted}\n" in body
+    assert f"subq_10.{quoted}\n" in body
+    assert "AS order\n" not in body
+    assert ".order\n" not in body
+    # Only the reserved name changes: unquoting it gives metricflow's own SQL back.
+    plain = body.replace(quoted, "order")
+    assert "order_items_src_10000.order_id = subq_10.order\n" in plain
+
+
 def test_unsupported_adapter(make_project: MakeProject) -> None:
     project = load_project(make_project("core_export"))
     with pytest.raises(ExportRenderError, match=r"'sqlserver'.*snowflake"):
