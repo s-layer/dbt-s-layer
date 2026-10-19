@@ -7,11 +7,14 @@ import shutil
 import subprocess
 from collections.abc import Callable
 from importlib.metadata import PackageNotFoundError
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import pytest
+from typer.testing import CliRunner
 
 from dbt_s_layer import _doctor
+from dbt_s_layer.cli import app
 from dbt_s_layer._doctor import (
     DBT_CORE_INSTALL_URL,
     FUSION_INSTALL_URL,
@@ -22,7 +25,6 @@ from dbt_s_layer._doctor import (
 )
 
 if TYPE_CHECKING:
-    from pathlib import Path
 
     from tests.conftest import MakeProject
 
@@ -485,3 +487,101 @@ def test_doctor_skips_project_check_without_metricflow(
     out = capsys.readouterr().out
     assert "SKIP artifacts" in out
     assert "metricflow" in out
+
+
+# --- output directory (CLI-03) ------------------------------------------------
+
+
+def test_doctor_output_dir_writable(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    make_project: MakeProject,
+) -> None:
+    _engines_ok(monkeypatch)
+    project_dir = make_project("core_export")
+    out = project_dir / "models" / "semantic"
+    out.mkdir()
+    assert run_doctor(project_dir) == 0
+    assert f"OK  output directory: {out} is writable" in capsys.readouterr().out
+
+
+def test_doctor_output_dir_not_created_yet(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    make_project: MakeProject,
+) -> None:
+    _engines_ok(monkeypatch)
+    project_dir = make_project("core_export")
+    assert run_doctor(project_dir, Path("models/gen/deep")) == 0
+    out = capsys.readouterr().out
+    assert f"OK  output directory: {project_dir / 'models/gen/deep'} does not exist yet" in out
+    assert str(project_dir / "models") in out
+    assert not (project_dir / "models" / "gen").exists()
+
+
+@pytest.mark.parametrize("existing", [True, False])
+def test_doctor_output_dir_not_writable(
+    existing: bool,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    make_project: MakeProject,
+) -> None:
+    # Tests may run as root, which os.access never refuses, so refusal is simulated.
+    _engines_ok(monkeypatch)
+    project_dir = make_project("core_export")
+    out = project_dir / "models" / "semantic"
+    if existing:
+        out.mkdir()
+    locked = out if existing else project_dir / "models"
+    monkeypatch.setattr(
+        _doctor.os, "access", lambda path, mode: Path(path) != locked  # pyright: ignore[reportUnknownLambdaType]
+    )
+    assert run_doctor(project_dir) == 1
+    text = capsys.readouterr().out
+    assert "ERROR output directory:" in text
+    assert str(locked) in text
+
+
+def test_doctor_output_dir_parent_not_writable(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    make_project: MakeProject,
+) -> None:
+    # Files are staged beside the output directory, so its parent must be writable too.
+    _engines_ok(monkeypatch)
+    project_dir = make_project("core_export")
+    (project_dir / "models" / "semantic").mkdir()
+    locked = project_dir / "models"
+    monkeypatch.setattr(
+        _doctor.os, "access", lambda path, mode: Path(path) != locked  # pyright: ignore[reportUnknownLambdaType]
+    )
+    assert run_doctor(project_dir) == 1
+    assert "ERROR output directory:" in capsys.readouterr().out
+
+
+def test_doctor_output_dir_is_a_file(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    make_project: MakeProject,
+) -> None:
+    _engines_ok(monkeypatch)
+    project_dir = make_project("core_export")
+    (project_dir / "models" / "semantic").write_text("")
+    assert run_doctor(project_dir) == 1
+    assert "is not a directory" in capsys.readouterr().out
+
+
+def test_doctor_cli_passes_output_dir(make_project: MakeProject, monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: list[tuple[object, object]] = []
+
+    def fake(project_dir: object = None, output_dir: object = None) -> int:
+        seen.append((project_dir, output_dir))
+        return 0
+
+    monkeypatch.setattr(_doctor, "run_doctor", fake)
+    project_dir = make_project("core_export")
+    result = CliRunner().invoke(
+        app, ["doctor", "--project-dir", str(project_dir), "--output-dir", "models/x"]
+    )
+    assert result.exit_code == 0, result.output
+    assert seen == [(project_dir, Path("models/x"))]
