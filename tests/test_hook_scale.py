@@ -21,8 +21,8 @@ import time
 from typing import TYPE_CHECKING
 
 import pytest
-
 from scripts.make_scale_project import write_project
+
 from tests.test_snowflake_compile import _ENV, _find
 
 if TYPE_CHECKING:
