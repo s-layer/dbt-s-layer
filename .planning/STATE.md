@@ -64,6 +64,7 @@ Recent decisions affecting current work:
 - Fusion binary subprocess + Python metricflow (handles both YAML specs without ELv2 contamination)
 - Sentinel prefix for ref() rewriting (narrow public MetricFlow surfaces)
 - Pin only `metricflow==0.213.0`; load manifests via its bundled `metricflow_semantic_interfaces` (pydantic v1 models), not `dbt-semantic-interfaces`
+- Databricks metric views target `dbt-databricks >= 1.12.0` (GA; databricks/dbt-databricks#1106 closed by PR #1285, latest 1.12.7), no longer the 1.12.0a1 alpha
 
 ### Pending Todos
 
