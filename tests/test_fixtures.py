@@ -31,8 +31,14 @@ SNOWFLAKE_SETS = {
     "fusion_snowflake": "Fusion 2.",
     "core_snowflake": "dbt Core 1.",
 }
-SETS = {**BASE_SETS, **EXPORT_SETS, **SNOWFLAKE_SETS}
+# Sets parsed on a Databricks target with dbt-databricks >= 1.12.0 (Phase 6).
+DATABRICKS_SETS = {
+    "fusion_databricks": "Fusion 2.",
+    "core_databricks": "dbt Core 1.",
+}
+SETS = {**BASE_SETS, **EXPORT_SETS, **SNOWFLAKE_SETS, **DATABRICKS_SETS}
 SEMANTIC_VIEW_MACRO = "macro.dbt_semantic_view.materialization_semantic_view_snowflake"
+METRIC_VIEW_MACRO = "macro.dbt_databricks.materialization_metric_view_databricks"
 EXPORT_SAVED_QUERIES = {
     "cumulative_revenue",
     "items_by_country",
@@ -82,11 +88,15 @@ def test_semantic_manifest_has_orders_and_saved_query(set_name: str) -> None:
 def test_manifest_is_trimmed(set_name: str) -> None:
     manifest = _load(set_name, "manifest.json")
     assert set(manifest) - {"macros"} == {"metadata", "nodes", "saved_queries", "semantic_models"}
-    # Only the dbt_semantic_view materializations, by id, and only where it is installed.
-    assert ("macros" in manifest) == (set_name in SNOWFLAKE_SETS)
+    # Only the semantic and metric view materializations, by id, and only where installed.
+    assert ("macros" in manifest) == (set_name in SNOWFLAKE_SETS or set_name in DATABRICKS_SETS)
+    package = "dbt_databricks" if set_name in DATABRICKS_SETS else "dbt_semantic_view"
     for macro_id, macro in manifest.get("macros", {}).items():
-        assert macro_id.startswith("macro.dbt_semantic_view.materialization_")
-        assert macro == {"unique_id": macro_id, "package_name": "dbt_semantic_view"}
+        if set_name in DATABRICKS_SETS:
+            assert macro_id == METRIC_VIEW_MACRO
+        else:
+            assert macro_id.startswith("macro.dbt_semantic_view.materialization_")
+        assert macro == {"unique_id": macro_id, "package_name": package}
     assert set(manifest["metadata"]) <= {
         "adapter_type",
         "dbt_schema_version",
@@ -201,7 +211,23 @@ def test_snowflake_sets_have_the_semantic_view_package(set_name: str) -> None:
     assert SEMANTIC_VIEW_MACRO in manifest["macros"]
 
 
-@pytest.mark.parametrize("set_name", SNOWFLAKE_SETS)
+@pytest.mark.parametrize("set_name", DATABRICKS_SETS)
+def test_databricks_sets_have_the_metric_view_materialization(set_name: str) -> None:
+    manifest = _load(set_name, "manifest.json")
+    assert manifest["metadata"]["adapter_type"] == "databricks"
+    assert METRIC_VIEW_MACRO in manifest["macros"]
+
+
+def test_core_databricks_has_an_approximate_discrete_percentile() -> None:
+    semantic = _load("core_databricks", "semantic_manifest.json")
+    orders = next(sm for sm in semantic["semantic_models"] if sm["name"] == "orders")
+    measure = next(m for m in orders["measures"] if m["name"] == "amount_p50_approx")
+    params = measure["agg_params"]
+    assert params["use_approximate_percentile"] is True
+    assert params["use_discrete_percentile"] is True
+
+
+@pytest.mark.parametrize("set_name", [*SNOWFLAKE_SETS, *DATABRICKS_SETS])
 def test_snowflake_sets_cover_the_metric_mapping(set_name: str) -> None:
     semantic = _load(set_name, "semantic_manifest.json")
     assert _names(semantic["semantic_models"]) == {"customers", "order_items", "orders", "stores"}

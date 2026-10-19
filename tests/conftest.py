@@ -21,6 +21,8 @@ SET_PROJECTS = {
     "core_export": "export_legacy",
     "fusion_snowflake": "snowflake_spec",
     "core_snowflake": "snowflake_legacy",
+    "fusion_databricks": "databricks_spec",
+    "core_databricks": "databricks_legacy",
 }
 # Sets the Phase 1 loader tests run over.
 ARTIFACT_SETS = ("fusion_new", "core_new", "core_legacy")
@@ -28,6 +30,8 @@ ARTIFACT_SETS = ("fusion_new", "core_new", "core_legacy")
 EXPORT_SETS = ("fusion_export", "core_export")
 # Sets parsed on a Snowflake target with the dbt_semantic_view package installed.
 SNOWFLAKE_SETS = ("fusion_snowflake", "core_snowflake")
+# Sets parsed on a Databricks target with dbt-databricks' metric_view materialization.
+DATABRICKS_SETS = ("fusion_databricks", "core_databricks")
 
 MakeProject = Callable[[str], Path]
 

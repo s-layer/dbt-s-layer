@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import os
 from dataclasses import replace
 from io import StringIO
+from pathlib import Path
 from typing import Any
 
 import jinja2
@@ -12,6 +14,7 @@ from ruamel.yaml import YAML
 
 from dbt_s_layer.databricks import CONFIG, render_databricks, yaml_string
 from dbt_s_layer.errors import SemanticViewError
+from dbt_s_layer.project import load_project
 from dbt_s_layer.semantic_views import (
     DerivedMetricSpec,
     DimensionSpec,
@@ -23,7 +26,18 @@ from dbt_s_layer.semantic_views import (
     RenderedView,
     SemanticViewSpec,
     TableSpec,
+    build_semantic_views,
 )
+from tests.conftest import (
+    ARTIFACT_SETS,
+    DATABRICKS_SETS,
+    EXPORT_SETS,
+    SNOWFLAKE_SETS,
+    MakeProject,
+)
+
+SNAPSHOTS = Path(__file__).parent / "snapshots" / "semantic_views" / "databricks"
+ALL_SETS = (*ARTIFACT_SETS, *EXPORT_SETS, *SNOWFLAKE_SETS, *DATABRICKS_SETS)
 
 ITEMS = TableSpec(alias="order_items", semantic_model="order_items", ref="{{ ref('order_items') }}")
 ORDERS = TableSpec(alias="orders", semantic_model="orders", ref="{{ ref('orders') }}")
@@ -424,3 +438,72 @@ def test_a_field_that_is_its_own_column_is_harmless() -> None:
 def test_an_empty_view_is_refused() -> None:
     with pytest.raises(SemanticViewError, match="at least one"):
         render_databricks(_view(dimensions=(), metrics=()))
+
+
+# --- snapshots --------------------------------------------------------------------------
+
+
+def _rendered(set_name: str, make_project: MakeProject) -> dict[str, RenderedView]:
+    project = load_project(make_project(set_name))
+    build = build_semantic_views(project, adapter="databricks")
+    return {f"sem__{view.name}": render_databricks(view) for view in build.views}
+
+
+@pytest.mark.parametrize("set_name", ALL_SETS)
+def test_snapshots_cover_every_view(set_name: str, make_project: MakeProject) -> None:
+    rendered = {name: view.body for name, view in _rendered(set_name, make_project).items()}
+    folder = SNAPSHOTS / set_name
+    if os.environ.get("UPDATE_SNAPSHOTS"):
+        folder.mkdir(parents=True, exist_ok=True)
+        for old in folder.glob("*.sql"):
+            old.unlink()
+        for name, text in rendered.items():
+            (folder / f"{name}.sql").write_text(text)
+    on_disk = {p.stem: p.read_text() for p in sorted(folder.glob("*.sql"))}
+    assert on_disk == rendered, "re-run with UPDATE_SNAPSHOTS=1 and review the diff"
+
+
+def test_snapshots_exist() -> None:
+    folders = {p.name for p in SNAPSHOTS.iterdir() if any(p.glob("*.sql"))}
+    assert folders == set(ALL_SETS)
+
+
+@pytest.mark.parametrize("set_name", ALL_SETS)
+def test_every_snapshot_is_yaml(set_name: str) -> None:
+    for path in sorted((SNAPSHOTS / set_name).glob("*.sql")):
+        definition = _load(path.read_text())
+        assert definition["version"] == 1.1, path.name
+        assert definition["source"].startswith("`main`.`marts`."), path.name
+
+
+# --- the Databricks fixture projects ----------------------------------------------------
+
+
+@pytest.mark.parametrize("set_name", DATABRICKS_SETS)
+def test_databricks_fixture_measures(set_name: str, make_project: MakeProject) -> None:
+    orders = _load(_rendered(set_name, make_project)["sem__orders"].body)
+    assert orders["comment"] == "One row per order. It's the 'fact' table."
+    measures = {m["name"]: m for m in orders["measures"]}
+    assert measures["order_count"]["comment"] == "Distinct orders."
+    assert measures["order_count"]["expr"] == "COUNT(DISTINCT source.order_id)"
+    assert measures["revenue"]["display_name"] == "Revenue"
+    assert measures["revenue_p90"]["expr"] == (
+        "PERCENTILE_DISC(0.9) WITHIN GROUP (ORDER BY source.amount)"
+    )
+    assert measures["latest_revenue"]["window"] == [
+        {"order": "ordered_at", "range": "current", "semiadditive": "last"}
+    ]
+    assert measures["average_order_value"]["expr"] == (
+        "MEASURE(`revenue`) / NULLIF(MEASURE(`order_count`), 0)"
+    )
+    assert measures["revenue_doubled"]["expr"] == "MEASURE(`revenue`) * 2"
+    assert "revenue_cumulative" not in measures
+    assert "revenue_per_item" not in measures
+    dimensions = {d["name"] for d in orders["dimensions"]}
+    assert {"ordered_at", "status", "customer__country", "store__region"} <= dimensions
+    approximate = measures.get("revenue_p50_approx")
+    if set_name == "core_databricks":
+        assert approximate is not None
+        assert approximate["expr"] == "APPROX_PERCENTILE(source.amount, 0.5)"
+    else:
+        assert approximate is None
