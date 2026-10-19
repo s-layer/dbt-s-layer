@@ -23,6 +23,7 @@ from tests.conftest import ARTIFACTS
 if TYPE_CHECKING:
     from click.testing import Result
 
+    from dbt_s_layer._doctor import Detection
     from tests.conftest import MakeProject
 
 runner = CliRunner()
@@ -427,6 +428,29 @@ def test_a_legacy_project_is_parsed_with_dbt_core(project: Path, fake_dbt: FakeD
     assert result.exit_code == 1, result.output
     assert [name for name, *_ in fake_dbt.calls()] == ["dbt"]
     assert (project / OUTPUT / "exp__revenue_by_day__exp_revenue_by_day.sql").is_file()
+
+
+def test_engines_are_probed_once_per_run(
+    project: Path, fake_dbt: FakeDbt, make_project: MakeProject, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # `dbt --version` takes seconds with dbt Core; two legacy projects need it once.
+    from dbt_s_layer import _hook as hook_module
+
+    probes: list[None] = []
+    real = hook_module.detect_engines
+
+    def counting() -> Detection:
+        probes.append(None)
+        return real()
+
+    monkeypatch.setattr(hook_module, "detect_engines", counting)
+    fake_dbt.install("dbtf")
+    fake_dbt.install("dbt")
+    make_project("core_legacy")
+    result = _hook(SEMANTIC_FILE, "core_legacy/models/marts/orders.yml")
+    assert result.exit_code == 1, result.output
+    assert [name for name, *_ in fake_dbt.calls()] == ["dbt", "dbt"]
+    assert len(probes) == 1
 
 
 @pytest.mark.parametrize(
