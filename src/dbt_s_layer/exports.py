@@ -244,8 +244,9 @@ def render_exports(
         ) from exc
 
     models: dict[str, ExportModel] = {}
-    # (schema, alias), lowercased like dbt's own check -> model: dbt refuses two
-    # models on one relation.
+    # (schema, alias) -> model. dbt refuses two models on one relation, but
+    # compares case-sensitively; Snowflake, DuckDB and Databricks fold unquoted
+    # names, so different case still builds one table (03-RESEARCH finding 2).
     relations: dict[tuple[str | None, str], ExportModel] = {}
     for saved_query in sorted(table.manifest.saved_queries, key=lambda sq: sq.name):
         if not saved_query.exports:

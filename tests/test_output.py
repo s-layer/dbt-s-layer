@@ -398,7 +398,10 @@ def test_user_model_with_a_generated_name(resource_type: str, make_project: Make
     )
     with pytest.raises(
         ModelClashError,
-        match=r"exp__cumulative_revenue__exp_cumulative.*models/exp__cumulative_revenue__exp_cumulative\.sql",
+        match=(
+            r"exp__cumulative_revenue__exp_cumulative.*"
+            r"models/exp__cumulative_revenue__exp_cumulative\.sql"
+        ),
     ):
         _render_into(project_dir)
 
@@ -432,7 +435,10 @@ def test_user_model_on_an_export_relation(
     _add_node(project_dir, "daily_revenue", alias=alias, config={"schema": schema})
     with pytest.raises(
         ModelClashError,
-        match=r"exp_revenue_by_day_view.*revenue_by_day.*model\.fx\.daily_revenue.*alias 'revenue_daily'",
+        match=(
+            r"exp_revenue_by_day_view.*revenue_by_day.*model\.fx\.daily_revenue"
+            r".*alias 'revenue_daily'"
+        ),
     ):
         _render_into(project_dir)
 
@@ -461,7 +467,9 @@ def test_user_model_in_the_target_schema(make_project: MakeProject) -> None:
         },
     ],
 )
-def test_different_relations_do_not_clash(fields: dict[str, Any], make_project: MakeProject) -> None:
+def test_different_relations_do_not_clash(
+    fields: dict[str, Any], make_project: MakeProject
+) -> None:
     project_dir = make_project("core_export")
     _add_node(project_dir, "user_model", **fields)
     assert list(_render_into(project_dir)) == [SCHEMA_FILE, *EXPORT_FILES]

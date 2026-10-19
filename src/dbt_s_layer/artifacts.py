@@ -186,6 +186,16 @@ class DependsOn(_ManifestModel):
     nodes: tuple[str, ...] = ()
 
 
+class NodeConfig(_ManifestModel):
+    """The `config` keys of a node that place its relation."""
+
+    # The custom schema, before generate_schema_name.
+    schema_name: str | None = Field(default=None, alias="schema")
+    database: str | None = None
+    # Legacy snapshots: a schema used as is.
+    target_schema: str | None = None
+
+
 class ModelNode(_ManifestModel):
     """A `nodes[*]` entry a semantic model can read: a model, seed or snapshot."""
 
@@ -201,6 +211,9 @@ class ModelNode(_ManifestModel):
     # The engine's own rendering of the relation, quoted by dbt Core but not by
     # Fusion. Only compared with strings from the same engine (time spines).
     relation_name: str | None = None
+    # Relative to the package's root.
+    original_file_path: str = ""
+    config: NodeConfig = NodeConfig()
 
 
 class DbtSemanticModel(_ManifestModel):

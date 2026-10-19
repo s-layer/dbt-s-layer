@@ -18,12 +18,13 @@ from typing import TYPE_CHECKING
 
 from ruamel.yaml import YAML
 
-from dbt_s_layer.errors import OutputConflictError
+from dbt_s_layer.errors import ModelClashError, OutputConflictError
 from dbt_s_layer.exports import render_exports
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping
 
+    from dbt_s_layer.artifacts import ModelNode
     from dbt_s_layer.exports import ExportModel
     from dbt_s_layer.project import SemanticProject
 
@@ -85,9 +86,64 @@ def _schema_file(models: Iterable[ExportModel], descriptions: Mapping[str, str |
     return f"{_YAML_MARK}. {_DO_NOT_EDIT}\n{stream.getvalue()}"
 
 
-def render_output(project: SemanticProject, *, adapter: str | None = None) -> dict[str, str]:
-    """Return every generated file as name -> text, sorted; empty when nothing is generated."""
+def _relation_key(schema: str | None, alias: str) -> tuple[str | None, str]:
+    return (schema.lower() if schema is not None else None, alias.lower())
+
+
+def _check_clashes(
+    project: SemanticProject, models: Iterable[ExportModel], output_dir: Path
+) -> None:
+    """
+    Refuse generated models that clash with the user's own nodes.
+
+    Nodes in `output_dir` are earlier dbt-s-layer output and are skipped. A
+    relation is compared by custom schema and alias, case-insensitively, which
+    is exact whenever generate_schema_name depends only on the custom schema
+    (03-RESEARCH finding 3). Nodes that set a database are skipped: exports
+    cannot set one.
+    """
+    root = project.dbt_manifest.metadata.project_name
+    output_dir = output_dir.resolve()
+    by_name: dict[str, ModelNode] = {}
+    by_relation: dict[tuple[str | None, str], ModelNode] = {}
+    for node in sorted(project.dbt_manifest.nodes.values(), key=lambda n: n.unique_id):
+        if node.package_name == root:
+            if (project.project_dir / node.original_file_path).parent.resolve() == output_dir:
+                continue
+            by_name.setdefault(node.name.lower(), node)
+        if node.config.database is not None or node.config.target_schema is not None:
+            continue
+        by_relation.setdefault(_relation_key(node.config.schema_name, node.alias), node)
+
+    for model in models:
+        name = model.file_name.removesuffix(".sql")
+        node = by_name.get(name.lower())
+        if node is not None:
+            raise ModelClashError(
+                f"{model.file_name} would define model {name!r}, but {node.unique_id} "
+                f"({node.original_file_path}) already has that name. Rename one of them."
+            )
+        node = by_relation.get(_relation_key(model.schema, model.alias))
+        if node is not None:
+            where = f"custom schema {model.schema!r}" if model.schema else "the target schema"
+            raise ModelClashError(
+                f"export {model.export!r} of saved query {model.saved_query!r} and "
+                f"{node.unique_id} ({node.original_file_path}) would both build alias "
+                f"{model.alias!r} in {where}. Give the export its own `alias` or `schema`."
+            )
+
+
+def render_output(
+    project: SemanticProject, *, adapter: str | None = None, output_dir: Path | None = None
+) -> dict[str, str]:
+    """
+    Return every generated file as name -> text, sorted; empty when nothing is generated.
+
+    With `output_dir`, also refuse models that clash with the project's own.
+    """
     models = render_exports(project, adapter=adapter)
+    if output_dir is not None:
+        _check_clashes(project, models, output_dir)
     if not models:
         return {}
     descriptions = {sq.name: sq.description for sq in project.semantic_manifest.saved_queries}

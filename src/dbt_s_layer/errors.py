@@ -46,3 +46,7 @@ class OutputConflictError(DbtSLayerError):
 
 class ProfileError(DbtSLayerError):
     """A dbt target's adapter type cannot be read from profiles.yml."""
+
+
+class ModelClashError(DbtSLayerError):
+    """A generated model would clash with one of the user's own models."""
