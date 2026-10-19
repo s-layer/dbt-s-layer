@@ -30,6 +30,15 @@ EXPORT_FILES = [
     "exp__revenue_by_region_country__exp_region_country.sql",
 ]
 ALL_FILES = sorted([SCHEMA_FILE, *EXPORT_FILES])
+SEM_FILES = [
+    "sem__customers.sql",
+    "sem__order_items.sql",
+    "sem__orders.sql",
+    "sem__stores.sql",
+]
+UNSUPPORTED_DUCKDB = (
+    "WARN semantic views: not generated for adapter 'duckdb' yet; only exports were generated."
+)
 
 
 def _invoke(*args: str | Path) -> Result:
@@ -99,7 +108,10 @@ def test_relative_output_dir_is_relative_to_the_project(
     assert result.exit_code == 0, result.output
     assert _listing(project_dir / "models" / "gen") == ALL_FILES
     assert _listing(elsewhere) == []
-    assert "WARN" not in result.output
+    # No model-paths warning; DuckDB has no semantic views yet (Phase 7), which is the one WARN.
+    assert [line for line in result.output.splitlines() if line.startswith("WARN")] == [
+        UNSUPPORTED_DUCKDB
+    ]
 
 
 def test_absolute_output_dir(project_dir: Path) -> None:
@@ -315,3 +327,40 @@ def test_check_on_stale_artifacts(project_dir: Path) -> None:
     result = _invoke("check", "--project-dir", project_dir)
     assert result.exit_code == 1
     assert "dbt parse" in result.output
+
+
+# --- semantic views (Phase 4) -----------------------------------------------------------
+
+
+def test_generate_prints_render_warnings(project_dir: Path) -> None:
+    result = _invoke("generate", "--project-dir", project_dir)
+    assert result.exit_code == 0, result.output
+    assert UNSUPPORTED_DUCKDB in result.output.splitlines()
+
+
+def test_generate_semantic_views_for_snowflake(project_dir: Path) -> None:
+    result = _invoke("generate", "--project-dir", project_dir, "--adapter", "snowflake")
+    assert result.exit_code == 0, result.output
+    out = project_dir / "models" / "semantic"
+    assert _listing(out) == sorted([*ALL_FILES, *SEM_FILES])
+    assert "10 files" in result.output
+    lines = result.output.splitlines()
+    assert any(
+        line.startswith("WARN semantic views: the dbt_semantic_view package") for line in lines
+    )
+    assert any("'revenue_cumulative'" in line and line.startswith("WARN") for line in lines)
+    # The same warnings, and no drift, from `check`.
+    result = _invoke("check", "--project-dir", project_dir, "--adapter", "snowflake")
+    assert result.exit_code == 0, result.output
+    assert any(
+        line.startswith("WARN semantic views: the dbt_semantic_view package")
+        for line in result.output.splitlines()
+    )
+
+
+def test_check_after_switching_to_snowflake(project_dir: Path) -> None:
+    assert _invoke("generate", "--project-dir", project_dir).exit_code == 0
+    result = _invoke("check", "--project-dir", project_dir, "--adapter", "snowflake")
+    assert result.exit_code == 1
+    for name in SEM_FILES:
+        assert f"missing: {name}" in result.output
