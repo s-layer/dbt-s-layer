@@ -1,4 +1,4 @@
-# dbt-s-layer
+# dbt-s-layer (WIP)
 
 dbt semantic-layer features for dbt Core / Fusion users, no dbt Cloud required.
 
