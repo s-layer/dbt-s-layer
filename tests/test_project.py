@@ -3,14 +3,14 @@
 from __future__ import annotations
 
 import json
+from dataclasses import FrozenInstanceError
 from pathlib import Path
 
 import pytest
 from metricflow_semantics.model.semantic_manifest_lookup import SemanticManifestLookup
-from pydantic import ValidationError
 
 from dbt_s_layer.errors import ArtifactInvalidError, ArtifactNotFoundError
-from dbt_s_layer.project import SemanticProject, load_project, producer_label
+from dbt_s_layer.project import load_project, producer_label
 from tests.conftest import ARTIFACT_SETS, MakeProject
 
 # What each fixture set must load as. dbt Core drops `customers` (a semantic
@@ -32,11 +32,6 @@ EXPECTED = {
         "metrics": {"items_sold", "revenue"},
     },
 }
-
-
-@pytest.fixture(autouse=True)
-def _no_target_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("DBT_TARGET_PATH", raising=False)
 
 
 @pytest.mark.parametrize("set_name", ARTIFACT_SETS)
@@ -72,8 +67,8 @@ def test_legacy_and_new_spec_core_sets_agree(make_project: MakeProject) -> None:
 
 def test_project_is_frozen(make_project: MakeProject) -> None:
     project = load_project(make_project("core_new"))
-    with pytest.raises(ValidationError):
-        project.producer = "other"
+    with pytest.raises(FrozenInstanceError):
+        project.producer = "other"  # pyright: ignore[reportAttributeAccessIssue]
 
 
 def test_load_project_reads_the_configured_target_path(make_project: MakeProject) -> None:
@@ -131,11 +126,9 @@ def test_producer_label(dbt_version: str, label: str) -> None:
     assert producer_label(dbt_version) == label
 
 
-def test_semantic_project_type_is_exported() -> None:
-    assert SemanticProject.model_config.get("frozen") is True
-
-
-def test_project_dir_is_resolved(make_project: MakeProject, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_project_dir_is_resolved(
+    make_project: MakeProject, monkeypatch: pytest.MonkeyPatch
+) -> None:
     project_dir = make_project("core_new")
     monkeypatch.chdir(project_dir.parent)
     project = load_project(Path(project_dir.name))

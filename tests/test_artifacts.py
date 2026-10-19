@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import pytest
 from metricflow_semantics.model.semantic_manifest_lookup import SemanticManifestLookup
@@ -18,8 +17,12 @@ from dbt_s_layer.errors import (
 )
 from tests.conftest import ARTIFACT_SETS, ARTIFACTS
 
+if TYPE_CHECKING:
+    from pathlib import Path
+
 
 def _project(tmp_path: Path, dbt_project: str = "name: fx\nprofile: fx\n") -> Path:
+    tmp_path.mkdir(parents=True, exist_ok=True)
     (tmp_path / "dbt_project.yml").write_text(dbt_project)
     return tmp_path
 
@@ -35,11 +38,6 @@ def _fixture_json(set_name: str, name: str) -> dict[str, Any]:
 
 
 # --- resolve_target_dir -----------------------------------------------------
-
-
-@pytest.fixture(autouse=True)
-def _no_target_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("DBT_TARGET_PATH", raising=False)
 
 
 def test_target_dir_defaults_to_target(tmp_path: Path) -> None:
@@ -107,12 +105,14 @@ def test_semantic_manifest_loads_and_builds_a_lookup(set_name: str, tmp_path: Pa
     assert "orders" in {sm.name for sm in manifest.semantic_models}
 
 
-def test_semantic_manifest_names_are_lowercased(tmp_path: Path) -> None:
+def test_semantic_model_names_are_lowercased(tmp_path: Path) -> None:
+    # metricflow's LowerCaseNamesRule runs on load; the ref map keys on its output.
     raw = _fixture_json("core_new", "semantic_manifest.json")
-    raw["metrics"][0]["name"] = raw["metrics"][0]["name"].upper()
+    for sm in raw["semantic_models"]:
+        sm["name"] = sm["name"].upper()
     path = _write_json(tmp_path / "semantic_manifest.json", raw)
     manifest = read_semantic_manifest(path, project_dir=tmp_path)
-    assert {m.name for m in manifest.metrics} == {"items_sold", "revenue"}
+    assert {sm.name for sm in manifest.semantic_models} == {"order_items", "orders"}
 
 
 def test_missing_semantic_manifest_says_run_dbt_parse(tmp_path: Path) -> None:
@@ -243,4 +243,3 @@ def test_artifact_that_is_a_directory_is_invalid(tmp_path: Path) -> None:
     with pytest.raises(ArtifactInvalidError) as exc:
         read_dbt_manifest(path, project_dir=tmp_path)
     assert str(path) in str(exc.value)
-

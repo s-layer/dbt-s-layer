@@ -89,7 +89,9 @@ def test_semantic_model_dependencies_exist_in_nodes(set_name: str) -> None:
 @pytest.mark.parametrize("set_name", SETS)
 def test_both_artifacts_list_the_same_semantic_models(set_name: str) -> None:
     semantic = _names(_load(set_name, "semantic_manifest.json")["semantic_models"])
-    in_manifest = {sm["name"] for sm in _load(set_name, "manifest.json")["semantic_models"].values()}
+    in_manifest = {
+        sm["name"] for sm in _load(set_name, "manifest.json")["semantic_models"].values()
+    }
     assert semantic == in_manifest
 
 

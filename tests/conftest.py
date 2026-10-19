@@ -23,6 +23,12 @@ ARTIFACT_SETS = tuple(SET_PROJECTS)
 MakeProject = Callable[[str], Path]
 
 
+@pytest.fixture(autouse=True)
+def no_dbt_target_path_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep a developer's DBT_TARGET_PATH from leaking into target-dir resolution."""
+    monkeypatch.delenv("DBT_TARGET_PATH", raising=False)
+
+
 @pytest.fixture
 def make_project(tmp_path: Path) -> MakeProject:
     """
