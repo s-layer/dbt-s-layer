@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
+import os
 import re
-from typing import TYPE_CHECKING, Any
+import signal
+import threading
+from typing import TYPE_CHECKING, Any, cast
 
 import jinja2
 import pytest
@@ -18,7 +22,7 @@ from dbt_s_layer.sentinels import postflight
 from tests.conftest import EXPORT_SETS
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Generator
     from pathlib import Path
 
     from dbt_s_layer.project import SemanticProject
@@ -749,3 +753,59 @@ def test_worker_count_rejects_a_bad_environment_variable(
 def test_jobs_must_be_positive(make_project: MakeProject) -> None:
     with pytest.raises(ValueError, match=r"jobs"):
         render_exports(load_project(make_project("core_export")), jobs=0)
+
+
+class _Timeout(Exception):
+    pass
+
+
+@contextlib.contextmanager
+def _deadline(seconds: int) -> Generator[None]:
+    """Raise _Timeout in the main thread after `seconds`, so a hang fails the test."""
+
+    def expire(signum: int, frame: object) -> None:
+        raise _Timeout(f"still running after {seconds}s")
+
+    previous = signal.signal(signal.SIGALRM, expire)
+    signal.alarm(seconds)
+    try:
+        yield
+    finally:
+        signal.alarm(0)
+        signal.signal(signal.SIGALRM, previous)
+
+
+def test_a_worker_that_dies_is_an_error_not_a_hang(monkeypatch: pytest.MonkeyPatch) -> None:
+    from dbt_s_layer import exports
+
+    def explain(shared: object, saved_query: str) -> Any:
+        if saved_query == "dies":
+            os._exit(1)  # as an out-of-memory kill or a segfault would end it
+        return exports._Explained(f"select '{saved_query}'", None)
+
+    monkeypatch.setattr(exports, "_explain", explain)
+    # Serial explaining would run os._exit in this process.
+    assert threading.active_count() == 1
+    with _deadline(60), pytest.raises(ExportRenderError, match=r"DBT_S_LAYER_JOBS=1"):
+        exports._explain_all(cast("Any", object()), ["a", "dies", "b", "c"], 2)
+
+
+def test_no_fork_while_another_thread_runs(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Forking a multi-threaded process can deadlock the child (a lock another thread
+    # holds is copied locked), so the saved queries are explained in this process.
+    from dbt_s_layer import exports
+
+    def explain(shared: object, saved_query: str) -> Any:
+        return exports._Explained(str(os.getpid()), None)
+
+    monkeypatch.setattr(exports, "_explain", explain)
+    release = threading.Event()
+    other = threading.Thread(target=release.wait, daemon=True)
+    other.start()
+    try:
+        with _deadline(60):
+            explained = exports._explain_all(cast("Any", object()), ["a", "b", "c", "d"], 4)
+    finally:
+        release.set()
+        other.join()
+    assert {e.sql for e in explained} == {str(os.getpid())}

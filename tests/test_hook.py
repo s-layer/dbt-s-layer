@@ -64,6 +64,13 @@ def _write(path: Path, text: str) -> Path:
         "models:\n  - semantic_model: {enabled: true}\n    name: orders\n",
         # spacing before the colon
         "saved_queries :\n  - name: q\n",
+        # a model that is only the time spine still feeds semantic_manifest.json
+        """\
+        models:
+          - name: all_days
+            time_spine:
+              standard_granularity_column: date_day
+        """,
     ],
 )
 def test_semantic_yaml_is_recognised(text: str, tmp_path: Path) -> None:
@@ -158,6 +165,34 @@ def test_a_local_package_selects_the_project_that_installs_it(tmp_path: Path) ->
     assert _select(root, "lib/models/s.yml") == [root / "lib"]
 
 
+@pytest.mark.parametrize("dependencies_file", ["packages.yml", "dependencies.yml"])
+def test_a_local_package_that_names_a_profile_selects_the_project_that_installs_it(
+    dependencies_file: str, tmp_path: Path
+) -> None:
+    # `dbt init` writes a `profile:` into every project, packages included; what makes
+    # `dep` a package is the root project listing it as a local package.
+    root = tmp_path / "repo"
+    _write(root / "analytics" / "dbt_project.yml", "name: a\nprofile: a\n")
+    _write(root / "analytics" / dependencies_file, "packages:\n  - local: packages/dep/\n")
+    _write(root / "analytics" / "packages" / "dep" / "dbt_project.yml", "name: dep\nprofile: d\n")
+    _write(root / "analytics" / "packages" / "dep" / "models" / "s.yml", "semantic_models: []\n")
+    assert _select(root, "analytics/packages/dep/models/s.yml") == [root / "analytics"]
+
+
+def test_a_nested_project_that_installs_its_parent_is_its_own_project(tmp_path: Path) -> None:
+    # The usual dbt package repository: the package at the root, and an
+    # integration_tests project inside it that installs the package with `local: ../`.
+    root = tmp_path / "repo"
+    _write(root / "dbt_project.yml", "name: pkg\nprofile: pkg\n")
+    _write(root / "models" / "s.yml", "semantic_models: []\n")
+    tests_dir = root / "integration_tests"
+    _write(tests_dir / "dbt_project.yml", "name: pkg_tests\nprofile: pkg_tests\n")
+    _write(tests_dir / "packages.yml", "packages:\n  - local: ../\n")
+    _write(tests_dir / "models" / "t.yml", "semantic_models: []\n")
+    assert _select(root, "integration_tests/models/t.yml") == [tests_dir]
+    assert _select(root, "models/s.yml") == [root]
+
+
 def test_projects_are_sorted_and_unique(repo: Path) -> None:
     files = ("other/models/m.yaml", "analytics/models/orders.yml", "analytics/dbt_project.yml")
     assert _select(repo, *files) == [repo / "analytics", repo / "other"]
@@ -192,6 +227,9 @@ FAKE_DBT = """\
 # FAKE_DBT_ARTIFACTS, or the artifact set named like the directory, into ./target.
 import json, os, shutil, sys
 from pathlib import Path
+if sys.argv[1:] == ["--version"]:
+    print({version!r})
+    sys.exit(0)
 with open(os.environ["FAKE_DBT_LOG"], "a") as log:
     log.write(json.dumps([Path(sys.argv[0]).name, sys.argv[1:], os.getcwd()]) + "\\n")
 if os.environ.get("FAKE_DBT_FAIL"):
@@ -206,14 +244,24 @@ for name in ("semantic_manifest.json", "manifest.json"):
 """
 
 
+# What each engine prints for `--version`.
+VERSIONS = {
+    "Fusion": "dbt-fusion 2.0.8",
+    "dbt Core": "Core:\n  - installed: 1.12.6\n  - latest:    1.12.6 - Up to date!\n",
+}
+
+
 class FakeDbt:
     def __init__(self, bin_dir: Path, log: Path) -> None:
         self.bin_dir = bin_dir
         self.log = log
 
-    def install(self, name: str) -> Path:
+    def install(self, name: str, kind: str | None = None) -> Path:
+        """Install a fake engine; `dbtf` is Fusion and anything else dbt Core, unless `kind`."""
+        kind = kind or ("Fusion" if name == "dbtf" else "dbt Core")
+        version = VERSIONS[kind]
         path = self.bin_dir / name
-        path.write_text(FAKE_DBT.format(python=sys.executable))
+        path.write_text(FAKE_DBT.format(python=sys.executable, version=version))
         path.chmod(0o755)
         return path
 
@@ -233,6 +281,9 @@ def fake_dbt(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> FakeDbt:
     bin_dir.mkdir()
     fake = FakeDbt(bin_dir, tmp_path / "dbt-calls.log")
     monkeypatch.setenv("PATH", str(bin_dir))
+    # No developer's ~/.dbt/profiles.yml or DBT_PROFILES_DIR reaches the parse arguments.
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.delenv("DBT_PROFILES_DIR", raising=False)
     monkeypatch.setenv("FAKE_DBT_LOG", str(fake.log))
     monkeypatch.setenv("FAKE_DBT_ROOT", str(ARTIFACTS))
     monkeypatch.delenv("FAKE_DBT_ARTIFACTS", raising=False)
@@ -356,11 +407,108 @@ def test_target_and_profiles_dir_reach_dbt_parse(project: Path, fake_dbt: FakeDb
     ]
 
 
-def test_dbtf_is_preferred(project: Path, fake_dbt: FakeDbt) -> None:
+def test_dbtf_is_preferred_for_the_new_spec(
+    make_project: MakeProject, fake_dbt: FakeDbt, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    new_spec = make_project("fusion_export")
+    monkeypatch.chdir(new_spec.parent)
     fake_dbt.install("dbt")
     fake_dbt.install("dbtf")
-    assert _hook(SEMANTIC_FILE).exit_code == 1
+    assert _hook("fusion_export/models/marts/orders.yml").exit_code == 1
     assert [name for name, *_ in fake_dbt.calls()] == ["dbtf"]
+
+
+def test_a_legacy_project_is_parsed_with_dbt_core(project: Path, fake_dbt: FakeDbt) -> None:
+    # core_export declares top-level `semantic_models:`, which Fusion ignores.
+    fake_dbt.install("dbtf")
+    fake_dbt.install("dbt")
+    result = _hook(SEMANTIC_FILE)
+    assert result.exit_code == 1, result.output
+    assert [name for name, *_ in fake_dbt.calls()] == ["dbt"]
+    assert (project / OUTPUT / "exp__revenue_by_day__exp_revenue_by_day.sql").is_file()
+
+
+@pytest.mark.parametrize(
+    "engines", [[("dbtf", "Fusion")], [("dbt", "Fusion")], [("dbtf", "Fusion"), ("dbt", "Fusion")]]
+)
+def test_a_legacy_project_without_dbt_core_is_an_error(
+    engines: list[tuple[str, str]], project: Path, fake_dbt: FakeDbt
+) -> None:
+    for name, kind in engines:
+        fake_dbt.install(name, kind)
+    result = _hook(SEMANTIC_FILE)
+    assert result.exit_code == 1, result.output
+    assert fake_dbt.calls() == []
+    assert "core_export/models/marts/orders.yml" in result.output
+    assert "dbt Core" in result.output
+    assert "--dbt" in result.output
+    assert not (project / OUTPUT).exists()
+
+
+def test_a_legacy_local_package_needs_dbt_core(
+    make_project: MakeProject, fake_dbt: FakeDbt, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The root project is new-spec, but a local package it installs is legacy.
+    new_spec = make_project("fusion_export")
+    monkeypatch.chdir(new_spec.parent)
+    _write(new_spec / "packages.yml", "packages:\n  - local: vendored/legacy_dep\n")
+    _write(new_spec / "vendored" / "legacy_dep" / "dbt_project.yml", "name: legacy_dep\n")
+    _write(
+        new_spec / "vendored" / "legacy_dep" / "models" / "s.yml",
+        "semantic_models:\n  - name: dep_orders\n    model: ref('orders')\n",
+    )
+    fake_dbt.install("dbtf")
+    result = _hook("fusion_export/models/marts/orders.yml")
+    assert result.exit_code == 1, result.output
+    assert fake_dbt.calls() == []
+    assert "fusion_export/vendored/legacy_dep/models/s.yml" in result.output
+
+
+def test_the_dbt_option_overrides_the_engine_choice(project: Path, fake_dbt: FakeDbt) -> None:
+    fake_dbt.install("dbtf")
+    fake_dbt.install("dbt")
+    assert _hook("--dbt", "dbtf", SEMANTIC_FILE).exit_code == 1
+    assert [name for name, *_ in fake_dbt.calls()] == ["dbtf"]
+
+
+def test_a_declared_semantic_model_missing_after_parse_is_an_error(
+    project: Path, fake_dbt: FakeDbt, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A parse that left out the declared `customers` semantic model (as Fusion does
+    # with legacy-spec ones), and with it the saved queries grouped by its country.
+    # The hook must not take that for removals and delete their exp__ files.
+    fake_dbt.install("dbt")
+    assert _hook(SEMANTIC_FILE).exit_code == 1
+    before = sorted(p.name for p in (project / OUTPUT).iterdir())
+    dropped = tmp_path / "dropped"
+    shutil.copytree(ARTIFACTS / "core_export", dropped)
+    path = dropped / "semantic_manifest.json"
+    raw = json.loads(path.read_text())
+    raw["semantic_models"] = [sm for sm in raw["semantic_models"] if sm["name"] != "customers"]
+    raw["saved_queries"] = [
+        sq for sq in raw["saved_queries"] if "customer__country" not in json.dumps(sq)
+    ]
+    path.write_text(json.dumps(raw))
+    monkeypatch.setenv("FAKE_DBT_ARTIFACTS", str(dropped))
+    result = _hook("--dbt", "dbt", SEMANTIC_FILE)
+    assert result.exit_code == 1, result.output
+    assert "ERROR" in result.output
+    assert "missing from semantic_manifest.json" in result.output
+    assert "removed:" not in result.output
+    assert sorted(p.name for p in (project / OUTPUT).iterdir()) == before
+
+
+def test_profiles_at_the_repo_root_reach_dbt_parse(project: Path, fake_dbt: FakeDbt) -> None:
+    # dbt-s-layer looks up --target in the working directory's profiles.yml first;
+    # `dbt parse` runs in the project, so it must be told to use the same file.
+    fake_dbt.install("dbt")
+    repo_root = project.parent
+    shutil.copyfile(project / "profiles" / "profiles.yml", repo_root / "profiles.yml")
+    result = _hook("--target", "duckdb", SEMANTIC_FILE)
+    assert result.exit_code == 1, result.output
+    assert fake_dbt.calls() == [
+        ("dbt", ["parse", "--target", "duckdb", "--profiles-dir", str(repo_root)], str(project))
+    ]
 
 
 def test_dbt_option_names_the_executable(
