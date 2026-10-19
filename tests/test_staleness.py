@@ -171,6 +171,10 @@ models:
   - name: off
     semantic_model:
       enabled: false
+  - name: model_off
+    config:
+      enabled: false
+    semantic_model: true
   - name: plain
 """,
             "models/legacy.yml": """\

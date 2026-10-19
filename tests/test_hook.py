@@ -473,31 +473,59 @@ def test_the_dbt_option_overrides_the_engine_choice(project: Path, fake_dbt: Fak
     assert [name for name, *_ in fake_dbt.calls()] == ["dbtf"]
 
 
-def test_a_declared_semantic_model_missing_after_parse_is_an_error(
-    project: Path, fake_dbt: FakeDbt, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    # A parse that left out the declared `customers` semantic model (as Fusion does
-    # with legacy-spec ones), and with it the saved queries grouped by its country.
-    # The hook must not take that for removals and delete their exp__ files.
-    fake_dbt.install("dbt")
-    assert _hook(SEMANTIC_FILE).exit_code == 1
-    before = sorted(p.name for p in (project / OUTPUT).iterdir())
+def _without_customers(tmp_path: Path, dbt_version: str) -> Path:
+    """core_export artifacts that lack the `customers` semantic model, as `dbt_version` wrote."""
     dropped = tmp_path / "dropped"
     shutil.copytree(ARTIFACTS / "core_export", dropped)
     path = dropped / "semantic_manifest.json"
     raw = json.loads(path.read_text())
     raw["semantic_models"] = [sm for sm in raw["semantic_models"] if sm["name"] != "customers"]
+    # With it go the saved queries grouped by its country.
     raw["saved_queries"] = [
         sq for sq in raw["saved_queries"] if "customer__country" not in json.dumps(sq)
     ]
     path.write_text(json.dumps(raw))
-    monkeypatch.setenv("FAKE_DBT_ARTIFACTS", str(dropped))
+    manifest = dropped / "manifest.json"
+    raw = json.loads(manifest.read_text())
+    raw["metadata"]["dbt_version"] = dbt_version
+    manifest.write_text(json.dumps(raw))
+    return dropped
+
+
+def test_a_semantic_model_the_engine_drops_is_an_error(
+    project: Path, fake_dbt: FakeDbt, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Fusion parsed the legacy-spec project and left out its `customers` semantic
+    # model. The hook must not take that for removals and delete their exp__ files.
+    fake_dbt.install("dbt")
+    assert _hook(SEMANTIC_FILE).exit_code == 1
+    before = sorted(p.name for p in (project / OUTPUT).iterdir())
+    monkeypatch.setenv("FAKE_DBT_ARTIFACTS", str(_without_customers(tmp_path, "2.0.8")))
     result = _hook("--dbt", "dbt", SEMANTIC_FILE)
     assert result.exit_code == 1, result.output
     assert "ERROR" in result.output
     assert "missing from semantic_manifest.json" in result.output
+    assert "Fusion ignores legacy-spec" in result.output
     assert "removed:" not in result.output
     assert sorted(p.name for p in (project / OUTPUT).iterdir()) == before
+
+
+def test_a_semantic_model_dbt_disables_is_removed_with_a_warning(
+    project: Path, fake_dbt: FakeDbt, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The engine reads this spec, so a missing model was disabled in a way the YAML
+    # scan can't see (`+enabled: false` on its path in dbt_project.yml, say): its
+    # generated files go, as they would on any removal.
+    fake_dbt.install("dbt")
+    assert _hook(SEMANTIC_FILE).exit_code == 1
+    before = sorted(p.name for p in (project / OUTPUT).iterdir())
+    monkeypatch.setenv("FAKE_DBT_ARTIFACTS", str(_without_customers(tmp_path, "1.12.6")))
+    result = _hook("--dbt", "dbt", SEMANTIC_FILE)
+    assert result.exit_code == 1, result.output
+    assert "ERROR" not in result.output
+    assert "WARN semantic model 'customers'" in result.output
+    assert "removed:" in result.output
+    assert sorted(p.name for p in (project / OUTPUT).iterdir()) != before
 
 
 def test_profiles_at_the_repo_root_reach_dbt_parse(project: Path, fake_dbt: FakeDbt) -> None:
