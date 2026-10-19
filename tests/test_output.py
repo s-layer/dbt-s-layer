@@ -852,6 +852,23 @@ def test_a_semantic_view_error_skips_only_that_view(
     assert warning in files.warnings
     assert list(files.warnings) == sorted(files.warnings)
 
+def test_a_skipped_view_keeps_none_of_its_own_warnings(make_project: MakeProject) -> None:
+    # Review round 2: the diamond closure of sem__orders warns "kept the join from ...",
+    # but sem__orders is then skipped, so only the skip is reported for it.
+    project_dir = make_project("fusion_export")
+
+    def mutate(raw: dict[str, Any]) -> None:
+        _shadowing_dimension(raw)
+        customers = next(s for s in raw["semantic_models"] if s["name"] == "customers")
+        store = {"name": "store", "type": "foreign", "expr": "home_store_id"}
+        customers["entities"].append({**customers["entities"][0], **store})
+
+    _semantic(project_dir, mutate)
+    files = render_output(load_project(project_dir))
+    assert [w for w in files.warnings if "sem__orders" in w] == [SHADOWING_WARNING]
+    # The same diamond in a view that is written still warns.
+    assert any(w.startswith("semantic views: sem__order_items reaches") for w in files.warnings)
+
 
 @pytest.mark.parametrize("set_name", SNOWFLAKE_SETS)
 def test_installed_package_in_the_snowflake_fixture(
