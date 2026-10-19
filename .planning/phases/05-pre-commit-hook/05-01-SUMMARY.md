@@ -23,3 +23,26 @@
   in a pool, bind parameters in a pool, worker count, bad `DBT_S_LAYER_JOBS`, `jobs=0`).
   The existing `test_identical_saved_queries_render_identical_sql` is unchanged and still
   passes.
+
+## Review round 1 (PR #8)
+
+- The pool is now `concurrent.futures.ProcessPoolExecutor(mp_context=get_context("fork"))`
+  instead of `multiprocessing.Pool`: `Pool.map` waited forever when a worker died (it replaces
+  the process but the task is lost). A dead worker now raises `BrokenProcessPool`, turned into
+  an `ExportRenderError` that suggests `DBT_S_LAYER_JOBS=1`. Chosen over a serial fallback: a
+  worker killed for memory would likely take the parent down too, and a crash in metricflow
+  would repeat. With `fork` the executor starts every worker before its manager thread.
+- `_explain_all` stays serial while another thread runs (`threading.active_count() > 1`):
+  a forked child inherits locks other threads held.
+- macOS: kept `fork`. At the fork, the process has one thread (`MainThread`) after loading
+  the project, importing the CLI and building the engine; no `numpy`, `_scproxy`, `ctypes`
+  or `urllib.request` is imported (the usual sources of Objective-C / system-framework state
+  that make fork unsafe on darwin). Native extensions loaded: pydantic_core, rapidfuzz,
+  markupsafe, PyYAML's `_yaml`, and stdlib modules (`_ssl`, `_hashlib`, `_uuid`, ...).
+  On Python 3.13, the pool tests under `-X dev -W always::DeprecationWarning` emit no
+  "multi-threaded ... fork()" warning. (`-W error::DeprecationWarning` cannot detect it:
+  CPython clears a warning raised as an error inside `os.fork()`.) Linux only so far; to be
+  confirmed on a Mac.
+- Tests committed red first (test_exports.py, +2): a worker calling `os._exit` (SIGALRM
+  deadline: on the old code it timed out after 60 s), and no fork with a second thread
+  running (old code: four worker pids).

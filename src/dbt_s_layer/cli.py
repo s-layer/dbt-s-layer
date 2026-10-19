@@ -132,7 +132,10 @@ def pre_commit(
         str | None,
         typer.Option(
             "--dbt",
-            help="dbt executable that parses the project (default: dbtf if on PATH, else dbt).",
+            help=(
+                "dbt executable that parses the project (default: dbt Core for a project "
+                "with legacy-spec semantic_models:, else dbtf if on PATH, else dbt)."
+            ),
         ),
     ] = None,
     parse: Annotated[

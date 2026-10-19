@@ -24,3 +24,34 @@
   the future, which the fake parse could not overtake; it now ages the artifacts instead.
 - Tests committed red first: tests/test_hook.py (35 cases with a fake `dbt` script that logs
   its argv and directory and copies fixture artifacts into `target/`).
+
+## Review round 1 (PR #8)
+
+- Engine by YAML spec: with no `--dbt`, a project that declares a legacy-spec semantic
+  model (top-level `semantic_models:`) itself, in a `local:` package from packages.yml /
+  dependencies.yml, or in a package under `packages-install-path` is parsed with dbt Core,
+  found with `_doctor.detect_engines()` (`--version`). No dbt Core >= 1.7 is an error naming
+  the file, the engines found, and the ways out (install Core, `--dbt`, new spec,
+  `--no-parse`). Other projects keep `dbtf`, then `dbt`, without a `--version` probe. Before
+  this, with both on PATH the hook always used Fusion, which drops legacy models.
+- `DeclaredSemanticModel.legacy` detection reused: the YAML scan and `read_dbt_project` moved
+  to `_project_yaml` (no metricflow import), so the hook can choose before the first parse
+  starts; `profiles` now imports from there too and is light.
+- In the hook (`Options.missing_is_error`), a declared semantic model missing from
+  semantic_manifest.json is an `ArtifactIncompleteError` before anything is written, so a
+  wrong parse removes no generated file. `generate`, `check` and `doctor` still warn.
+- Project selection: starting at the closest dbt_project.yml, a project further up that lists
+  it as a `local:` package owns the file, whether or not the package names a `profile:`; a
+  package nothing lists and that names no profile goes to the nearest project above with one.
+  Deviation from the review's "else the outermost project with a profile": that would send
+  `integration_tests/` (which installs its parent with `local: ../`) to the parent package,
+  the usual dbt package layout; a guard test pins it.
+- `time_spine:` added to the trigger keys.
+- profiles.yml found once per project (`--profiles-dir`, else `profiles.find_profiles` order)
+  and passed to `dbt parse` as an absolute `--profiles-dir` and to generate.
+- Tests committed red first (tests/test_hook.py, +12 failing, +3 guards): the fake engine now
+  answers `--version` (`dbtf` Fusion, otherwise dbt Core, or as given) and the fixture
+  points HOME away from any real `~/.dbt`. `test_dbtf_is_preferred` now uses the new-spec
+  fusion_export project (core_export is legacy spec). One assertion was relaxed after the red
+  commit: the legacy error names the first legacy file in path order (customers.yml), not
+  orders.yml.
