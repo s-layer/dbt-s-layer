@@ -15,7 +15,7 @@ dbt-s-layer is a Python codegen tool that reads dbt semantic YAML (via `semantic
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 0: Foundation & Governance** - Repo scaffold, license CI, stack verification spike, doctor stub
-- [ ] **Phase 1: Parsing Pipeline** - Read `semantic_manifest.json` + `manifest.json`, build ref/source sentinel map
+- [x] **Phase 1: Parsing Pipeline** - Read `semantic_manifest.json` + `manifest.json`, build ref/source sentinel map
 - [ ] **Phase 2: Export SQL Generation** - MetricFlow engine integration + sentinel-prefix `ref()` rewriting (HIGH RISK)
 - [ ] **Phase 3: File Output + CLI** - Atomic byte-stable writer, `generate` / `check` commands, companion YAML
 - [ ] **Phase 4: Snowflake Adapter** - `sem__*.sql` via `dbt_semantic_view` package (HIGH RISK)
@@ -52,10 +52,10 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. Every `semantic_model.node_relation.relation_name` is mapped to a `ref()` / `source()` sentinel via `manifest.json` `depends_on.nodes` lookup
   4. Running any CLI command with a stale or missing `semantic_manifest.json` exits with a clear error telling the user to run `dbt parse` / `dbtf parse`
 **Plans**: 4 plans
-  - [ ] 01-01-PLAN.md — Fixture corpus: real artifacts from Fusion 2.0.8 (new spec) and dbt Core 1.12.6 (new + legacy spec), regen script, corpus guard tests (Wave 1)
-  - [ ] 01-02-PLAN.md — Artifact readers + `SemanticProject` loader via metricflow's dbt manifest parser [PARSE-01, PARSE-02] (Wave 2)
-  - [ ] 01-03-PLAN.md — Ref map: semantic model -> dbt node, verbatim `ref()` expression, relation parts [PARSE-03] (Wave 3)
-  - [ ] 01-04-PLAN.md — Missing/stale artifact errors, dropped-semantic-model warning, `doctor --project-dir` [CLI-05, CLI-03] (Wave 3)
+  - [x] 01-01-PLAN.md — Fixture corpus: real artifacts from Fusion 2.0.8 (new spec) and dbt Core 1.12.6 (new + legacy spec), regen script, corpus guard tests (Wave 1)
+  - [x] 01-02-PLAN.md — Artifact readers + `SemanticProject` loader via metricflow's dbt manifest parser [PARSE-01, PARSE-02] (Wave 2)
+  - [x] 01-03-PLAN.md — Ref map: semantic model -> dbt node, verbatim `ref()` expression, relation parts [PARSE-03] (Wave 3)
+  - [x] 01-04-PLAN.md — Missing/stale artifact errors, dropped-semantic-model warning, `doctor --project-dir` [CLI-05, CLI-03] (Wave 3)
 
 ### Phase 2: Export SQL Generation
 **Goal**: Given a parsed `SemanticProject`, emit MetricFlow-rendered SQL for every `saved_query` export, with all physical table references rewritten to dbt `{{ ref() }}` / `{{ source() }}` / versioned / cross-project Jinja calls
@@ -146,7 +146,7 @@ Phases execute in numeric order: 0 → 1 → 2 → 3 → 4 → 5 → 6 → 7 →
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 0. Foundation & Governance | 4/4 | Complete | 2026-10-19 |
-| 1. Parsing Pipeline | 0/TBD | Not started | - |
+| 1. Parsing Pipeline | 4/4 | Complete | 2026-10-19 |
 | 2. Export SQL Generation | 0/TBD | Not started | - |
 | 3. File Output + CLI | 0/TBD | Not started | - |
 | 4. Snowflake Adapter | 0/TBD | Not started | - |

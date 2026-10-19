@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 1 planned (4 plans); ready to execute
-last_updated: "2026-10-19T12:45:00.000Z"
-last_activity: 2026-10-19 -- Phase 0 close-out review and verification
+stopped_at: Phase 1 complete; Phase 2 needs research
+last_updated: "2026-10-19T14:00:00.000Z"
+last_activity: 2026-10-19 -- Phase 1 executed and verified
 progress:
   total_phases: 9
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 8
-  completed_plans: 4
-  percent: 11
+  completed_plans: 8
+  percent: 22
 ---
 
 # Project State
@@ -21,22 +21,22 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-19)
 
 **Core value:** dbt Core users can materialise semantic models and exports directly in the warehouse with no dbt Cloud subscription — semantic YAML remains the single source of truth, generated models are first-class DAG nodes.
-**Current focus:** Phase 1 — Parsing Pipeline
+**Current focus:** Phase 2 — Export SQL Generation
 
 ## Current Position
 
-Phase: 1 of 8 (Parsing Pipeline)
+Phase: 2 of 8 (Export SQL Generation)
 Plan: — of — in current phase
-Status: Ready to execute
-Last activity: 2026-10-19 -- Phase 0 closed; Phase 1 researched and planned (4 plans, 3 waves)
+Status: Needs research (`/gsd-research-phase 2`), then planning
+Last activity: 2026-10-19 -- Phase 1 executed (4 plans) and verified
 
-Progress: [█░░░░░░░░░] 1 of 9 phases (4 of 8 planned plans)
+Progress: [██░░░░░░░░] 2 of 9 phases (8 of 8 planned plans)
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 4
+- Total plans completed: 8
 - Average duration: — min
 - Total execution time: 0.0 hours
 
@@ -77,12 +77,13 @@ See `_notes/` directory for captured todos:
 
 - Phase 2 (Export SQL Generation) flagged HIGH risk — `/gsd-research-phase` required before planning to verify MetricFlow internals against pinned versions
 - Phase 4 (Snowflake Adapter) flagged HIGH risk — `/gsd-research-phase` required before planning to verify Snowflake `CREATE SEMANTIC VIEW` grammar and `dbt_semantic_view` package schema
-- Fusion GA status + minimum supported version still unresolved — settle in Phase 1 research
+- Minimum supported Fusion version: only 2.0.8 tested; documented as tested, older 2.x not hard-failed (01-RESEARCH.md)
 - Verified 2026-10-19: Fusion 2.0.8 and dbt Core 1.12.6 manifests (both specs) load via `parse_manifest_from_dbt_generated_manifest` and render through `explain()` (01-RESEARCH.md)
-- dbt Core 1.12.6 silently drops semantic models attached to versioned models; Phase 1 warns on it (01-04)
+- dbt Core 1.12.6 silently drops semantic models attached to versioned models; `check_artifacts` warns on it (01-04), as it does for Fusion ignoring legacy-spec semantic models
+- Phase 3 `generate`/`check` must call `staleness.check_artifacts` so CLI-05 holds for every command
 
 ## Session Continuity
 
 Last session: 2026-10-19
-Stopped at: Phase 1 planned; ready for `/gsd-execute-phase 1`
+Stopped at: Phase 1 complete; next `/gsd-research-phase 2`
 Resume file: None

@@ -7,9 +7,9 @@
 
 ### Parsing
 
-- [ ] **PARSE-01**: Tool reads `target/semantic_manifest.json` produced by the user running `dbt parse` or `dbtf parse` — the tool does not invoke the dbt parser itself
-- [ ] **PARSE-02**: Tool works with `semantic_manifest.json` from both dbt Core (legacy YAML spec) and dbt Fusion (new 2.x spec) without any per-spec configuration, since both parsers produce the same artifact format
-- [ ] **PARSE-03**: Tool resolves each semantic model's upstream dependencies against `manifest.json` `depends_on.nodes` to build the ref/source sentinel map
+- [x] **PARSE-01**: Tool reads `target/semantic_manifest.json` produced by the user running `dbt parse` or `dbtf parse` — the tool does not invoke the dbt parser itself
+- [x] **PARSE-02**: Tool works with `semantic_manifest.json` from both dbt Core (legacy YAML spec) and dbt Fusion (new 2.x spec) without any per-spec configuration, since both parsers produce the same artifact format
+- [x] **PARSE-03**: Tool resolves each semantic model's upstream dependencies against `manifest.json` `depends_on.nodes` to build the ref/source sentinel map
 
 ### Export Codegen
 
@@ -41,7 +41,7 @@
 - [ ] **CLI-02**: `dbt-s-layer check` command re-runs codegen into a temp directory and exits non-zero if the output differs from committed files — suitable for CI enforcement
 - [ ] **CLI-03**: `dbt-s-layer doctor` command validates the environment: `semantic_manifest.json` presence and freshness, supported metricflow version, and output directory writability
 - [ ] **CLI-04**: `dbt-s-layer generate` accepts `--project-dir`, `--output-dir`, `--target` (dbt target name), and `--adapter` (warehouse override) flags
-- [ ] **CLI-05**: All commands produce actionable error messages when `semantic_manifest.json` is missing or older than the most recently modified semantic YAML file, prompting the user to run `dbt parse` or `dbtf parse`
+- [x] **CLI-05**: All commands produce actionable error messages when `semantic_manifest.json` is missing or older than the most recently modified semantic YAML file, prompting the user to run `dbt parse` or `dbtf parse`
 
 ### Pre-commit Hook
 
@@ -82,9 +82,9 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PARSE-01 | Phase 1 | Pending |
-| PARSE-02 | Phase 1 | Pending |
-| PARSE-03 | Phase 1 | Pending |
+| PARSE-01 | Phase 1 | Complete |
+| PARSE-02 | Phase 1 | Complete |
+| PARSE-03 | Phase 1 | Complete |
 | EXPRT-01 | Phase 2 | Pending |
 | EXPRT-02 | Phase 2 | Pending |
 | EXPRT-03 | Phase 2 | Pending |
@@ -102,9 +102,9 @@
 | OUTPT-05 | Phase 3 | Pending |
 | CLI-01 | Phase 3 | Pending |
 | CLI-02 | Phase 3 | Pending |
-| CLI-03 | Phase 0 | Partial (dbtf + metricflow checks done; manifest freshness in Phase 1, output dir in Phase 3) |
+| CLI-03 | Phase 0 | Partial (engine + metricflow checks in Phase 0, artifact freshness via `--project-dir` in Phase 1; output dir in Phase 3) |
 | CLI-04 | Phase 3 | Pending |
-| CLI-05 | Phase 1 | Pending |
+| CLI-05 | Phase 1 | Complete (`check_artifacts`; Phase 3 `generate`/`check` must call it) |
 | HOOK-01 | Phase 5 | Pending |
 | HOOK-02 | Phase 5 | Pending |
 
