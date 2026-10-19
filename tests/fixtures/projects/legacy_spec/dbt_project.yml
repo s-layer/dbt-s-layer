@@ -1,0 +1,4 @@
+name: fx
+version: "1.0.0"
+profile: fx
+model-paths: ["models"]

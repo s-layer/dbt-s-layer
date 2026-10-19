@@ -41,3 +41,8 @@ Thumbs.db
 
 # Spike results (committed selectively — only verify_stack.py output is kept)
 # (nothing excluded here — spike/ is committed in Plan 03)
+
+# dbt writes these when parsing the fixture projects
+tests/fixtures/projects/*/profiles/.user.yml
+tests/fixtures/projects/*/logs/
+tests/fixtures/projects/*/target/

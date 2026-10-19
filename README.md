@@ -20,7 +20,7 @@ Alpha. Under active development.
   - [dbt Core](https://docs.getdbt.com/docs/core/installation-overview) 1.7 or later, which parses both the legacy and the new semantic YAML spec
   - [dbt Fusion](https://docs.getdbt.com/docs/fusion/install-fusion), which parses the new spec only
 
-Run `dbt-s-layer doctor` to check what it finds.
+Run `dbt-s-layer doctor` to check what it finds. Add `--project-dir path/to/project` to also check that project's parse artifacts exist and are newer than its semantic YAML.
 
 ## License
 

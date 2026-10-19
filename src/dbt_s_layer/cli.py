@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from pathlib import Path  # noqa: TC003 - Typer resolves annotations at runtime
+from typing import Annotated
+
 import typer
 
 app = typer.Typer(
@@ -25,11 +28,20 @@ def _main() -> None:  # pyright: ignore[reportUnusedFunction]
 
 
 @app.command()
-def doctor() -> None:
-    """Report environment diagnostics (dbt engine, metricflow version)."""
-    from dbt_s_layer._doctor import run_doctor
+def doctor(
+    project_dir: Annotated[
+        Path | None,
+        typer.Option(
+            "--project-dir",
+            help="Also check this dbt project's parse artifacts exist and are up to date.",
+            file_okay=False,
+        ),
+    ] = None,
+) -> None:
+    """Report environment diagnostics (dbt engine, metricflow version, project artifacts)."""
+    from dbt_s_layer import _doctor
 
-    raise typer.Exit(code=run_doctor())
+    raise typer.Exit(code=_doctor.run_doctor(project_dir))
 
 
 if __name__ == "__main__":
