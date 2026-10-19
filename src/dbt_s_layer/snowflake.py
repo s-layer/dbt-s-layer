@@ -222,7 +222,8 @@ def _aggregate(view: str, metric: MetricSpec) -> str:
         raise SemanticViewError(
             f"sem__{view}: percentile metric {metric.name!r} has no percentile value."
         )
-    value = repr(percentile.value)
+    # Seven significant digits: Fusion stores `0.9` as the float32 0.8999999761581421.
+    value = f"{percentile.value:.7g}"
     if percentile.approximate:
         if percentile.discrete:
             raise SemanticViewError(

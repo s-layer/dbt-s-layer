@@ -8,11 +8,16 @@ Each artifact set is produced by a real `dbt parse` of a fixture project:
     core_legacy  tests/fixtures/projects/legacy_spec  dbt Core,   duckdb target
     fusion_export tests/fixtures/projects/export_spec   dbt Fusion, snowflake target
     core_export  tests/fixtures/projects/export_legacy dbt Core,   duckdb target
+    fusion_snowflake tests/fixtures/projects/snowflake_spec dbt Fusion, snowflake target
+    core_snowflake   tests/fixtures/projects/snowflake_legacy dbt Core, snowflake target
 
-Projects with a `packages.yml` get `dbt deps` first.
+Projects with a `packages.yml` get `dbt deps` first (the snowflake_* projects download the
+dbt_semantic_view package from GitHub). The dbt Core used must have the duckdb and
+snowflake adapters.
 
 `manifest.json` is trimmed to what dbt-s-layer reads (metadata, model, seed and
-snapshot nodes, semantic models and saved queries), and every machine- or
+snapshot nodes, semantic models and saved queries, and the ids of the
+dbt_semantic_view materializations when that package is installed), and every machine- or
 run-specific value is dropped, so that regenerating with the same engine
 versions produces no diff.
 
@@ -50,12 +55,16 @@ SETS: list[tuple[str, str, EngineKind, str]] = [
     ("core_legacy", "legacy_spec", "dbt Core", "duckdb"),
     ("fusion_export", "export_spec", "Fusion", "snowflake"),
     ("core_export", "export_legacy", "dbt Core", "duckdb"),
+    ("fusion_snowflake", "snowflake_spec", "Fusion", "snowflake"),
+    ("core_snowflake", "snowflake_legacy", "dbt Core", "snowflake"),
 ]
 
 # Only these metadata keys are stable across machines and runs.
 _METADATA_KEYS = ("adapter_type", "dbt_schema_version", "dbt_version", "project_name", "quoting")
 # Node types a semantic model can read from.
 _RELATION_NODE_TYPES = ("model", "seed", "snapshot")
+# Macros kept (ids only): they tell dbt-s-layer whether dbt_semantic_view is installed.
+_KEPT_MACRO_PREFIX = "macro.dbt_semantic_view.materialization_"
 # Node keys that vary per run or per machine.
 _VOLATILE_NODE_KEYS = ("created_at", "root_path", "build_path", "compiled_path", "deferred")
 
@@ -95,7 +104,12 @@ def _strip_volatile(node: dict[str, Any]) -> dict[str, Any]:
 def trim_manifest(manifest: dict[str, Any]) -> dict[str, Any]:
     """Reduce manifest.json to the keys dbt-s-layer reads, minus run-specific values."""
     metadata = manifest["metadata"]
-    return {
+    macros = {
+        macro_id: {"unique_id": macro_id, "package_name": macro["package_name"]}
+        for macro_id, macro in manifest.get("macros", {}).items()
+        if macro_id.startswith(_KEPT_MACRO_PREFIX)
+    }
+    trimmed = {
         "metadata": {k: metadata[k] for k in _METADATA_KEYS if k in metadata},
         "nodes": {
             node_id: _strip_volatile(node)
@@ -109,6 +123,10 @@ def trim_manifest(manifest: dict[str, Any]) -> dict[str, Any]:
             sq_id: _strip_volatile(sq) for sq_id, sq in manifest["saved_queries"].items()
         },
     }
+    # Only when there are any, so sets without the package keep their old shape.
+    if macros:
+        trimmed["macros"] = macros
+    return trimmed
 
 
 def _dump(data: Any) -> str:
