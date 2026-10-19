@@ -252,6 +252,11 @@ def rewrite(sql: str, table: SentinelTable, *, context: str) -> str:
     return "".join(parts)
 
 
+def has_reserved_prefix(text: str) -> bool:
+    """Whether `text` contains a reserved prefix, in any case."""
+    return _RESERVED_RE.search(text) is not None
+
+
 def postflight(text: str, *, context: str) -> None:
     """Refuse generated text that still contains a reserved prefix in any case."""
     found = sorted({m.group(0) for m in _RESERVED_RE.finditer(text)})

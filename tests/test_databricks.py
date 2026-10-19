@@ -440,7 +440,6 @@ def test_an_empty_view_is_refused() -> None:
         render_databricks(_view(dimensions=(), metrics=()))
 
 
-
 def test_a_field_name_with_a_reserved_prefix_is_refused() -> None:
     # Two hops through an entity named `source` give `order__source__country`, which
     # holds the `__SOURCE__` placeholder prefix: only this view may be skipped.
@@ -484,6 +483,7 @@ def test_a_column_with_a_dollar_is_quoted() -> None:
     assert loaded["joins"][0]["on"] == "source.`order$id` = orders.order_id"
     assert loaded["dimensions"][0]["expr"] == "orders.`status$code`"
     assert loaded["measures"][0]["expr"] == "SUM(source.`qty$total`)"
+
 
 # --- snapshots --------------------------------------------------------------------------
 

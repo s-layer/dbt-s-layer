@@ -177,7 +177,7 @@ _DATE_PART_FIRST = frozenset(
 # The second word of a two-word type name, as in `::double precision`.
 _TYPE_SECOND_WORDS = frozenset(["PRECISION", "VARYING"])
 
-_SIMPLE_AGGREGATIONS = {
+SIMPLE_AGGREGATIONS = {
     "sum": "SUM({})",
     "min": "MIN({})",
     "max": "MAX({})",
@@ -248,7 +248,7 @@ def _dimension(dimension: DimensionSpec) -> str:
 def _aggregate(view: str, metric: MetricSpec) -> str:
     expr = _expr(metric.expr)
     if metric.agg != "percentile":
-        return _SIMPLE_AGGREGATIONS[metric.agg].format(expr)
+        return SIMPLE_AGGREGATIONS[metric.agg].format(expr)
     percentile = metric.percentile
     if percentile is None:
         raise SemanticViewError(
@@ -383,7 +383,7 @@ def check_name_shadowing(spec: SemanticViewSpec) -> None:
             ("dimension", d.name, d.expr, d.expr) for d in spec.dimensions if d.table == table.alias
         ]
         elements += [
-            ("metric", m.name, m.expr, _SIMPLE_AGGREGATIONS.get(m.agg, "{}").format(m.expr))
+            ("metric", m.name, m.expr, SIMPLE_AGGREGATIONS.get(m.agg, "{}").format(m.expr))
             for m in spec.metrics
             if m.table == table.alias
         ]

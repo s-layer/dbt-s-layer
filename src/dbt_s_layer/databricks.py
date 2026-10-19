@@ -20,8 +20,8 @@ from typing import TYPE_CHECKING
 
 from dbt_s_layer.errors import SemanticViewError
 from dbt_s_layer.semantic_views import MetricRef, RenderedView, is_bare_identifier
-from dbt_s_layer.sentinels import escape_jinja, postflight
-from dbt_s_layer.snowflake import column_references
+from dbt_s_layer.sentinels import escape_jinja, has_reserved_prefix, postflight
+from dbt_s_layer.snowflake import SIMPLE_AGGREGATIONS, column_references
 
 if TYPE_CHECKING:
     from dbt_s_layer.semantic_views import (
@@ -40,16 +40,6 @@ SPEC_VERSION = "1.1"
 # The name a metric view gives its root table.
 SOURCE = "source"
 
-_SIMPLE_AGGREGATIONS = {
-    "sum": "SUM({})",
-    "min": "MIN({})",
-    "max": "MAX({})",
-    "average": "AVG({})",
-    "count": "COUNT({})",
-    "count_distinct": "COUNT(DISTINCT {})",
-    "sum_boolean": "SUM(CASE WHEN {} THEN 1 ELSE 0 END)",
-}
-
 _YAML_ESCAPES = {
     "\\": "\\\\",
     '"': '\\"',
@@ -59,6 +49,9 @@ _YAML_ESCAPES = {
     # dbt-databricks wraps the definition in `$$ ... $$`; no `$` may reach it.
     "$": "\\x24",
 }
+# Not printable in YAML (C1 controls, BOM, non-characters), or a line break YAML 1.1
+# folds inside a quoted scalar (NEL, LS, PS).
+_YAML_UNSAFE = {0x85, 0x2028, 0x2029, 0xFEFF, 0xFFFE, 0xFFFF}
 
 
 def yaml_string(text: str) -> str:
@@ -66,8 +59,9 @@ def yaml_string(text: str) -> str:
     out: list[str] = []
     for char in text:
         escaped = _YAML_ESCAPES.get(char)
-        if escaped is None and (ord(char) < 0x20 or ord(char) == 0x7F):
-            escaped = f"\\x{ord(char):02x}"
+        code = ord(char)
+        if escaped is None and (code < 0x20 or 0x7F <= code <= 0x9F or code in _YAML_UNSAFE):
+            escaped = f"\\x{code:02x}" if code <= 0xFF else f"\\u{code:04x}"
         out.append(char if escaped is None else escaped)
     return '"' + "".join(out) + '"'
 
@@ -95,8 +89,13 @@ def _places(spec: SemanticViewSpec) -> dict[str, _Place]:
     return places
 
 
+def _identifier(column: str) -> str:
+    # Snowflake allows `$` in a bare name; Databricks SQL needs it quoted.
+    return f"`{column}`" if "$" in column else column
+
+
 def _column(place: _Place, expr: str) -> str:
-    return f"{place.path}.{expr}" if is_bare_identifier(expr) else expr
+    return f"{place.path}.{_identifier(expr)}" if is_bare_identifier(expr) else expr
 
 
 @dataclass(frozen=True)
@@ -131,7 +130,10 @@ def _joins(
     for rel in children:
         table: TableSpec = tables[rel.parent]
         child_name = SOURCE if places[rel.child].path == SOURCE else rel.child
-        on = f"{child_name}.{rel.child_column} = {rel.parent}.{rel.parent_column}"
+        on = (
+            f"{child_name}.{_identifier(rel.child_column)} = "
+            f"{rel.parent}.{_identifier(rel.parent_column)}"
+        )
         lines.append(f"{indent}  - name: {_text(rel.parent)}")
         lines.append(f"{indent}    source: {yaml_string(table.ref)}")
         lines.append(f'{indent}    "on": {_text(on)}')
@@ -141,7 +143,7 @@ def _joins(
 
 def _aggregate(view: str, metric: MetricSpec, expr: str) -> str:
     if metric.agg != "percentile":
-        return _SIMPLE_AGGREGATIONS[metric.agg].format(expr)
+        return SIMPLE_AGGREGATIONS[metric.agg].format(expr)
     percentile = metric.percentile
     if percentile is None:
         raise SemanticViewError(
@@ -195,6 +197,12 @@ def _used_inputs(derived: tuple[DerivedMetricSpec, ...]) -> dict[str, str]:
 def _check_names(view: str, elements: list[_Element]) -> None:
     seen: dict[str, str] = {}
     for element in elements:
+        if has_reserved_prefix(element.name):
+            raise SemanticViewError(
+                f"sem__{view}: {element.kind} name {element.name!r} contains a prefix "
+                "dbt-s-layer reserves for its table placeholders. Rename the entity or "
+                "semantic model it is built from."
+            )
         folded = element.name.lower()
         if folded in seen:
             raise SemanticViewError(
@@ -232,10 +240,6 @@ def _check_shadowing(view: str, elements: list[_Element]) -> None:
 def render_databricks(spec: SemanticViewSpec) -> RenderedView:
     """Return the model body: `{{ config() }}`, a blank line, and the metric view YAML."""
     view = spec.name
-    if not spec.dimensions and not spec.metrics and not spec.derived_metrics:
-        raise SemanticViewError(
-            f"sem__{view}: a metric view needs at least one dimension or metric."
-        )
     root = spec.tables[0]
     for table in spec.tables[1:]:
         if table.alias.lower() == SOURCE:
@@ -285,6 +289,10 @@ def render_databricks(spec: SemanticViewSpec) -> RenderedView:
     measures = [_measure(view, m, places[m.table]) for m in metrics]
     measures += [_derived(d) for d in sorted(derived, key=lambda d: d.name)]
 
+    if not dimensions and not measures:
+        raise SemanticViewError(
+            f"sem__{view}: a metric view needs at least one dimension or metric."
+        )
     _check_names(view, dimensions + measures)
     _check_shadowing(view, dimensions + measures)
 
