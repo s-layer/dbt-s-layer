@@ -22,8 +22,7 @@ import json
 import os
 import shutil
 import subprocess
-from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import pytest
 from typer.testing import CliRunner
@@ -34,6 +33,9 @@ from dbt_s_layer.project import load_project
 from dbt_s_layer.refs import build_ref_map
 from dbt_s_layer.semantic_views import build_semantic_views
 from tests.conftest import PROJECTS
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 _TIMEOUT = 600
 _ENV = {**os.environ, "DO_NOT_TRACK": "1", "DBT_SEND_ANONYMOUS_USAGE_STATS": "false"}
@@ -90,7 +92,9 @@ def _ok(result: subprocess.CompletedProcess[str]) -> None:
 def test_generated_semantic_views_compile(kind: str, project: str, tmp_path: Path) -> None:
     binary = _find(kind)
     if binary is None:
-        pytest.skip(f"no {kind} engine (set DBT_S_LAYER_{'FUSION' if kind == 'Fusion' else 'CORE'})")
+        pytest.skip(
+            f"no {kind} engine (set DBT_S_LAYER_{'FUSION' if kind == 'Fusion' else 'CORE'})"
+        )
     project_dir = tmp_path / project
     shutil.copytree(
         PROJECTS / project,
