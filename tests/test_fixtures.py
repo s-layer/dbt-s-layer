@@ -63,7 +63,7 @@ def test_semantic_manifest_has_orders_and_saved_query(set_name: str) -> None:
 @pytest.mark.parametrize("set_name", SETS)
 def test_manifest_is_trimmed(set_name: str) -> None:
     manifest = _load(set_name, "manifest.json")
-    assert set(manifest) == {"metadata", "nodes", "semantic_models"}
+    assert set(manifest) == {"metadata", "nodes", "saved_queries", "semantic_models"}
     assert set(manifest["metadata"]) <= {
         "adapter_type",
         "dbt_schema_version",
@@ -71,9 +71,11 @@ def test_manifest_is_trimmed(set_name: str) -> None:
         "project_name",
         "quoting",
     }
+    # The fixture projects have no seeds or snapshots, so only models remain.
     assert {n["resource_type"] for n in manifest["nodes"].values()} == {"model"}
-    for node in manifest["nodes"].values():
-        assert "created_at" not in node
+    for entry in [*manifest["nodes"].values(), *manifest["saved_queries"].values()]:
+        assert "created_at" not in entry
+    assert set(manifest["saved_queries"]) == {"saved_query.fx.revenue_by_day"}
 
 
 @pytest.mark.parametrize("set_name", SETS)

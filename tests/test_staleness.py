@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from dbt_s_layer.errors import ArtifactNotFoundError, StaleArtifactError
+from dbt_s_layer.errors import ArtifactNotFoundError, DbtSLayerError, StaleArtifactError
 from dbt_s_layer.staleness import check_artifacts, scan_semantic_yaml
 from tests.conftest import ARTIFACTS
 
@@ -281,3 +281,121 @@ def test_unreadable_yaml_warning_is_reported(make_project: MakeProject) -> None:
     warnings = check_artifacts(project_dir).warnings
     assert len(warnings) == 1
     assert "models/bad.yml" in warnings[0]
+
+
+# --- review round 1: removals, dbt_project.yml, other resource paths ----------
+
+
+def _age(project_dir: Path, rel: str) -> None:
+    """Make a project file older than the artifact, isolating a non-mtime check."""
+    artifact_mtime = (project_dir / "target" / "semantic_manifest.json").stat().st_mtime
+    _touch(project_dir / rel, artifact_mtime - 100)
+
+
+def test_removed_semantic_model_yaml_is_stale(make_project: MakeProject) -> None:
+    # Dropping the `semantic_models:` block leaves no newer file to compare, but
+    # the artifact still has `order_items`.
+    project_dir = make_project("core_legacy")
+    path = project_dir / "models/marts/order_items.yml"
+    path.write_text("models:\n  - name: order_items\n    config:\n      alias: Order_Items\n")
+    _age(project_dir, "models/marts/order_items.yml")
+    with pytest.raises(StaleArtifactError) as exc:
+        check_artifacts(project_dir)
+    message = str(exc.value)
+    assert "semantic model 'order_items'" in message
+    assert "`dbt parse`" in message
+
+
+def test_deleted_semantic_yaml_file_is_stale(make_project: MakeProject) -> None:
+    project_dir = make_project("core_new")
+    (project_dir / "models/marts/order_items.yml").unlink()
+    with pytest.raises(StaleArtifactError) as exc:
+        check_artifacts(project_dir)
+    assert "'order_items'" in str(exc.value)
+
+
+def test_disabled_semantic_model_still_in_artifact_is_stale(make_project: MakeProject) -> None:
+    project_dir = make_project("core_new")
+    path = project_dir / "models/marts/order_items.yml"
+    path.write_text(path.read_text().replace("enabled: true", "enabled: false"))
+    _age(project_dir, "models/marts/order_items.yml")
+    with pytest.raises(StaleArtifactError) as exc:
+        check_artifacts(project_dir)
+    assert "'order_items'" in str(exc.value)
+
+
+def test_removed_saved_query_is_stale(make_project: MakeProject) -> None:
+    project_dir = make_project("core_legacy")
+    path = project_dir / "models/marts/orders.yml"
+    text = path.read_text()
+    path.write_text(text[: text.index("saved_queries:")])
+    _age(project_dir, "models/marts/orders.yml")
+    with pytest.raises(StaleArtifactError) as exc:
+        check_artifacts(project_dir)
+    assert "saved query 'revenue_by_day'" in str(exc.value)
+
+
+def test_undeclared_semantic_model_from_a_package_is_not_stale(
+    make_project: MakeProject,
+) -> None:
+    # A semantic model from an installed package is declared outside this
+    # project's paths, so its absence from the scan is expected.
+    project_dir = make_project("core_new")
+    manifest_path = project_dir / "target" / "manifest.json"
+    raw: dict[str, Any] = json.loads(manifest_path.read_text())
+    raw["semantic_models"]["semantic_model.fx.order_items"]["package_name"] = "upstream"
+    manifest_path.write_text(json.dumps(raw))
+    (project_dir / "models/marts/order_items.yml").unlink()
+    warnings = check_artifacts(project_dir).warnings
+    assert all("order_items" not in w for w in warnings)
+
+
+def test_removal_check_skipped_when_yaml_is_unreadable(make_project: MakeProject) -> None:
+    # The unreadable file might be the one declaring the semantic model.
+    project_dir = make_project("core_legacy")
+    path = project_dir / "models/marts/order_items.yml"
+    path.write_text("semantic_models: [unclosed\n")
+    _age(project_dir, "models/marts/order_items.yml")
+    warnings = check_artifacts(project_dir).warnings
+    assert len(warnings) == 1
+    assert "models/marts/order_items.yml" in warnings[0]
+
+
+def test_newer_dbt_project_yml_is_stale(make_project: MakeProject) -> None:
+    # e.g. `semantic-models: +enabled: false` set in dbt_project.yml.
+    project_dir = make_project("core_legacy")
+    artifact_mtime = (project_dir / "target" / "semantic_manifest.json").stat().st_mtime
+    _touch(project_dir / "dbt_project.yml", artifact_mtime + 10)
+    with pytest.raises(StaleArtifactError) as exc:
+        check_artifacts(project_dir)
+    assert "dbt_project.yml" in str(exc.value)
+
+
+@pytest.mark.parametrize(
+    ("config", "rel"),
+    [
+        ("", "seeds/props.yml"),
+        ("", "snapshots/props.yml"),
+        ("", "analyses/props.yml"),
+        ("", "macros/props.yml"),
+        ("seed-paths: [data]\n", "data/props.yml"),
+        ("snapshot-paths: [snaps]\n", "snaps/props.yml"),
+    ],
+)
+def test_other_resource_paths_are_scanned(tmp_path: Path, config: str, rel: str) -> None:
+    project = _project(tmp_path, {rel: NEW_SPEC_MODEL}, dbt_project=f"name: fx\n{config}")
+    assert _rel(project, scan_semantic_yaml(project).files) == [rel]
+
+
+def test_scan_error_is_a_named_error(
+    make_project: MakeProject, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    project_dir = make_project("core_new")
+
+    def denied(self: Path, pattern: str) -> object:
+        raise PermissionError(13, "Permission denied", str(self))
+
+    monkeypatch.setattr(type(project_dir), "rglob", denied)
+    with pytest.raises(DbtSLayerError) as exc:
+        check_artifacts(project_dir)
+    assert "Permission denied" in str(exc.value)

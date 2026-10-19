@@ -129,6 +129,23 @@ def test_semantic_model_name_matches_case_insensitively(make_project: MakeProjec
     assert build_ref_map(load_project(project_dir))["orders"].node_id == "model.fx.orders"
 
 
+@pytest.mark.parametrize("kind", ["seed", "snapshot"])
+def test_semantic_model_on_a_seed_or_snapshot(kind: str, make_project: MakeProject) -> None:
+    # dbt lets a semantic model `ref()` a seed or snapshot.
+    node_id = f"{kind}.fx.orders_{kind}"
+
+    def mutate(raw: dict[str, Any]) -> None:
+        node = dict(raw["nodes"]["model.fx.orders"])
+        node.update(resource_type=kind, unique_id=node_id, name=f"orders_{kind}")
+        raw["nodes"][node_id] = node
+        raw["semantic_models"]["semantic_model.fx.orders"]["depends_on"]["nodes"] = [node_id]
+
+    project_dir = _mutated_map(make_project, "core_new", mutate)
+    target = build_ref_map(load_project(project_dir))["orders"]
+    assert target.node_id == node_id
+    assert target.model_name == f"orders_{kind}"
+
+
 # --- failure cases: each gets its own test ----------------------------------
 
 
@@ -146,7 +163,7 @@ def test_no_upstream_model_node(make_project: MakeProject) -> None:
     def mutate(raw: dict[str, Any]) -> None:
         raw["semantic_models"]["semantic_model.fx.orders"]["depends_on"]["nodes"] = []
 
-    _assert_resolution_error(_mutated_map(make_project, "core_new", mutate), "no model")
+    _assert_resolution_error(_mutated_map(make_project, "core_new", mutate), "none")
 
 
 def test_only_non_model_upstream_nodes(make_project: MakeProject) -> None:
@@ -154,7 +171,9 @@ def test_only_non_model_upstream_nodes(make_project: MakeProject) -> None:
         deps = raw["semantic_models"]["semantic_model.fx.orders"]["depends_on"]
         deps["nodes"] = ["source.fx.raw.orders"]
 
-    _assert_resolution_error(_mutated_map(make_project, "core_new", mutate), "no model")
+    _assert_resolution_error(
+        _mutated_map(make_project, "core_new", mutate), "none", "model, seed or snapshot"
+    )
 
 
 def test_two_upstream_model_nodes(make_project: MakeProject) -> None:

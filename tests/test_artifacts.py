@@ -6,8 +6,10 @@ import json
 from typing import TYPE_CHECKING, Any
 
 import pytest
+from metricflow_semantics.errors.error_classes import MetricFlowException
 from metricflow_semantics.model.semantic_manifest_lookup import SemanticManifestLookup
 
+from dbt_s_layer import artifacts
 from dbt_s_layer.artifacts import read_dbt_manifest, read_semantic_manifest, resolve_target_dir
 from dbt_s_layer.errors import (
     ArtifactInvalidError,
@@ -186,11 +188,20 @@ def test_dbt_manifest_node_fields(tmp_path: Path) -> None:
     assert manifest.nodes["model.fx.orders"].version is None
 
 
-def test_dbt_manifest_keeps_only_model_nodes(tmp_path: Path) -> None:
+def test_dbt_manifest_keeps_models_seeds_and_snapshots(tmp_path: Path) -> None:
     raw = _fixture_json("core_new", "manifest.json")
-    # An untrimmed manifest also carries tests, seeds, macros, sources...
+    # An untrimmed manifest also carries tests, macros, sources...
     raw["nodes"]["test.fx.not_null_orders_order_id"] = {"resource_type": "test", "name": "t"}
-    raw["nodes"]["seed.fx.raw"] = {"resource_type": "seed"}
+    for kind in ("seed", "snapshot"):
+        raw["nodes"][f"{kind}.fx.raw_{kind}"] = {
+            "resource_type": kind,
+            "unique_id": f"{kind}.fx.raw_{kind}",
+            "name": f"raw_{kind}",
+            "package_name": "fx",
+            "database": "memory",
+            "schema": "marts",
+            "alias": f"raw_{kind}",
+        }
     raw["macros"] = {"macro.fx.m": {"name": "m"}}
     raw["sources"] = {"source.fx.s.t": {"name": "t"}}
     path = _write_json(tmp_path / "manifest.json", raw)
@@ -200,7 +211,43 @@ def test_dbt_manifest_keeps_only_model_nodes(tmp_path: Path) -> None:
         "model.fx.metricflow_time_spine",
         "model.fx.order_items",
         "model.fx.orders",
+        "seed.fx.raw_seed",
+        "snapshot.fx.raw_snapshot",
     }
+    assert manifest.nodes["seed.fx.raw_seed"].resource_type == "seed"
+
+
+def test_dbt_manifest_saved_queries(tmp_path: Path) -> None:
+    manifest = read_dbt_manifest(ARTIFACTS / "core_new" / "manifest.json", project_dir=tmp_path)
+    saved = manifest.saved_queries["saved_query.fx.revenue_by_day"]
+    assert (saved.name, saved.package_name) == ("revenue_by_day", "fx")
+
+
+def test_metricflow_transform_failure_is_named(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def boom(_manifest: object) -> object:
+        raise MetricFlowException("transform blew up")
+
+    monkeypatch.setattr(artifacts, "transform_dbt_generated_manifest", boom)
+    path = ARTIFACTS / "core_new" / "semantic_manifest.json"
+    with pytest.raises(ArtifactInvalidError) as exc:
+        read_semantic_manifest(path, project_dir=tmp_path)
+    assert str(path) in str(exc.value)
+    assert "transform blew up" in str(exc.value)
+
+
+def test_metricflow_error_with_empty_message(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def empty(_manifest: object) -> object:
+        raise MetricFlowException("")
+
+    monkeypatch.setattr(artifacts, "SemanticManifestLookup", empty)
+    path = ARTIFACTS / "core_new" / "semantic_manifest.json"
+    with pytest.raises(ArtifactInvalidError) as exc:
+        read_semantic_manifest(path, project_dir=tmp_path)
+    assert "MetricFlowException" in str(exc.value)
 
 
 def test_missing_dbt_manifest_says_run_dbt_parse(tmp_path: Path) -> None:

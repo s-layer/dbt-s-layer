@@ -468,11 +468,20 @@ def test_doctor_not_a_project(
     assert "not a dbt project" in capsys.readouterr().out
 
 
-def test_doctor_project_error_keeps_metricflow_severity(
-    monkeypatch: pytest.MonkeyPatch, make_project: MakeProject
+def test_doctor_skips_project_check_without_metricflow(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    make_project: MakeProject,
 ) -> None:
+    # Loading artifacts imports metricflow, so the check cannot run without it.
     _patch(monkeypatch, {"dbt": "/c/dbt"}, {"/c/dbt": CORE_OUTPUT})
     monkeypatch.setattr(_doctor, "version", _metricflow_missing)
-    project_dir = make_project("core_new")
-    shutil.rmtree(project_dir / "target")
-    assert run_doctor(project_dir) == 2
+
+    def must_not_run(_project_dir: Path) -> int:
+        raise AssertionError("project check ran without metricflow")
+
+    monkeypatch.setattr(_doctor, "_check_project", must_not_run)
+    assert run_doctor(make_project("core_new")) == 2
+    out = capsys.readouterr().out
+    assert "SKIP artifacts" in out
+    assert "metricflow" in out
