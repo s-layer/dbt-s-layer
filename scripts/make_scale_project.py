@@ -135,7 +135,9 @@ def write_project(dest: Path, *, models: int = 100, exports: int = 50) -> None:
     )
     (dest / "profiles").mkdir()
     (dest / "profiles" / "profiles.yml").write_text(PROFILES)
-    (marts / "metricflow_time_spine.sql").write_text("select cast('2024-01-01' as date) as date_day\n")
+    (marts / "metricflow_time_spine.sql").write_text(
+        "select cast('2024-01-01' as date) as date_day\n"
+    )
     (marts / "metricflow_time_spine.yml").write_text(TIME_SPINE_YML)
     (marts / "customers.sql").write_text(
         "select 1 as customer_id, 'GB' as country, cast('2024-01-01' as date) as signed_up_at\n"
@@ -151,7 +153,7 @@ def write_project(dest: Path, *, models: int = 100, exports: int = 50) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[1])
+    parser = argparse.ArgumentParser(description="Write the 100/50 timing project.")
     parser.add_argument("dest", type=Path)
     parser.add_argument("--models", type=int, default=100)
     parser.add_argument("--exports", type=int, default=50)
