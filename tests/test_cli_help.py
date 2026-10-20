@@ -130,3 +130,11 @@ def test_cli_works_without_metricflow(tmp_path: Path) -> None:
         assert "ModuleNotFoundError" not in result.stderr
     assert "metricflow is not installed" in result.stdout
     assert "output directory" in result.stdout
+
+
+def test_version_prints_the_installed_version() -> None:
+    from importlib.metadata import version
+
+    result = runner.invoke(app, ["--version"])
+    assert result.exit_code == 0
+    assert result.stdout == f"dbt-s-layer {version('dbt-s-layer')}\n"
