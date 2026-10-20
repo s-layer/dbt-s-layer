@@ -23,7 +23,7 @@ from typing import TYPE_CHECKING
 import pytest
 from scripts.make_scale_project import write_project
 
-from tests.test_snowflake_compile import _ENV, _find
+from tests.engines import ENV, find_engine
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -50,7 +50,7 @@ def _hook(binary: str, project: Path) -> tuple[subprocess.CompletedProcess[str],
         capture_output=True,
         text=True,
         timeout=600,
-        env=_ENV,
+        env=ENV,
         check=False,
     )
     return result, time.monotonic() - start
@@ -58,11 +58,10 @@ def _hook(binary: str, project: Path) -> tuple[subprocess.CompletedProcess[str],
 
 @pytest.mark.parametrize("kind", ["Fusion", "dbt Core"])
 def test_hook_on_100_semantic_models_and_50_exports(kind: str, tmp_path: Path) -> None:
-    binary = _find(kind)
+    variable = "DBT_S_LAYER_FUSION" if kind == "Fusion" else "DBT_S_LAYER_CORE"
+    binary = find_engine(kind, variable, "snowflake")
     if binary is None:
-        pytest.skip(
-            f"no {kind} engine (set DBT_S_LAYER_{'FUSION' if kind == 'Fusion' else 'CORE'})"
-        )
+        pytest.skip(f"no {kind} engine (set {variable})")
     project = tmp_path / "scale"
     write_project(project)
 

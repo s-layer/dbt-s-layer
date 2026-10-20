@@ -99,7 +99,7 @@ completed: 2026-04-21
 - `src/dbt_s_layer/py.typed` — empty (PEP 561 marker)
 - `.python-version` — `3.11`
 - `.gitignore` — Python + uv + build artifacts; `.venv/`, `__pycache__/`, `dist/`, `build/`, coverage outputs, IDE, OS noise
-- `LICENSE` — canonical Apache-2.0 (202 lines, 11402 bytes; sourced from dbt_utils package; copyright updated to `paul <ego@anentropic.com>` / `The dbt-s-layer Contributors`)
+- `LICENSE` — canonical Apache-2.0 (202 lines, 11402 bytes; sourced from dbt_utils package; copyright updated to `Anentropic <ego@anentropic.com>` / `The dbt-s-layer Contributors`)
 - `README.md` — project overview, status, requirements, license reference
 - `uv.lock` — 20 packages resolved; typer 0.24.1 landed
 

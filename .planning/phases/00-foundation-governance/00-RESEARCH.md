@@ -407,7 +407,7 @@ version = "0.1.0"
 description = "dbt Cloud semantic-layer features for dbt Core / Fusion users"
 readme = "README.md"
 license = "Apache-2.0"
-authors = [{ name = "paul", email = "ego@anentropic.com" }]
+authors = [{ name = "Anentropic", email = "ego@anentropic.com" }]
 requires-python = ">=3.11"
 dependencies = [
     # Runtime deps added by spike commit — placeholders below, replace with

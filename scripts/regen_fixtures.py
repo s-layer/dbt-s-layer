@@ -10,6 +10,9 @@ Each artifact set is produced by a real `dbt parse` of a fixture project:
     core_export  tests/fixtures/projects/export_legacy dbt Core,   duckdb target
     fusion_snowflake tests/fixtures/projects/snowflake_spec dbt Fusion, snowflake target
     core_snowflake   tests/fixtures/projects/snowflake_legacy dbt Core, snowflake target
+    fusion_databricks tests/fixtures/projects/databricks_spec dbt Fusion, databricks target
+    core_databricks  tests/fixtures/projects/databricks_legacy dbt Core with dbt-databricks,
+                     databricks target
 
 Projects with a `packages.yml` get `dbt deps` first (the snowflake_* projects download the
 dbt_semantic_view package from GitHub). The dbt Core used must have the duckdb and
@@ -17,12 +20,16 @@ snowflake adapters.
 
 `manifest.json` is trimmed to what dbt-s-layer reads (metadata, model, seed and
 snapshot nodes, semantic models and saved queries, and the ids of the
-dbt_semantic_view materializations when that package is installed), and every machine- or
-run-specific value is dropped, so that regenerating with the same engine
-versions produces no diff.
+dbt_semantic_view materializations when that package is installed, and of
+dbt-databricks' metric_view materialization), and every machine- or run-specific value
+is dropped, so that regenerating with the same engine versions produces no diff.
+
+dbt-databricks 1.12.7 needs dbt-core < 1.12.6, so the Databricks set takes its own dbt
+Core (`--core-databricks`, defaulting to `--core`).
 
 Usage:
-    uv run python scripts/regen_fixtures.py --fusion PATH --core PATH
+    uv run python scripts/regen_fixtures.py --fusion PATH --core PATH \
+        --core-databricks PATH [--sets SET ...]
 
 Without `--fusion`, `dbtf` is tried, then a `dbt` on PATH that reports Fusion 2.x.
 Without `--core`, a `dbt` on PATH that reports dbt Core is used.
@@ -38,18 +45,23 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from dbt_s_layer._doctor import Engine, parse_engine_version
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 ROOT = Path(__file__).resolve().parent.parent
 PROJECTS = ROOT / "tests" / "fixtures" / "projects"
 ARTIFACTS = ROOT / "tests" / "fixtures" / "artifacts"
 
 EngineKind = Literal["Fusion", "dbt Core"]
+# Which engine parses a set: the dbt Core for Databricks can differ from the other one.
+EngineKey = Literal["Fusion", "dbt Core", "dbt Core (Databricks)"]
 
-# (artifact set, project, engine kind, profile target)
-SETS: list[tuple[str, str, EngineKind, str]] = [
+# (artifact set, project, engine, profile target)
+SETS: list[tuple[str, str, EngineKey, str]] = [
     ("fusion_new", "new_spec", "Fusion", "snowflake"),
     ("core_new", "new_spec", "dbt Core", "duckdb"),
     ("core_legacy", "legacy_spec", "dbt Core", "duckdb"),
@@ -57,14 +69,20 @@ SETS: list[tuple[str, str, EngineKind, str]] = [
     ("core_export", "export_legacy", "dbt Core", "duckdb"),
     ("fusion_snowflake", "snowflake_spec", "Fusion", "snowflake"),
     ("core_snowflake", "snowflake_legacy", "dbt Core", "snowflake"),
+    ("fusion_databricks", "databricks_spec", "Fusion", "databricks"),
+    ("core_databricks", "databricks_legacy", "dbt Core (Databricks)", "databricks"),
 ]
 
 # Only these metadata keys are stable across machines and runs.
 _METADATA_KEYS = ("adapter_type", "dbt_schema_version", "dbt_version", "project_name", "quoting")
 # Node types a semantic model can read from.
 _RELATION_NODE_TYPES = ("model", "seed", "snapshot")
-# Macros kept (ids only): they tell dbt-s-layer whether dbt_semantic_view is installed.
-_KEPT_MACRO_PREFIX = "macro.dbt_semantic_view.materialization_"
+# Macros kept (ids only): they tell dbt-s-layer whether dbt_semantic_view is installed,
+# and whether dbt-databricks has the metric_view materialization.
+_KEPT_MACRO_PREFIXES = (
+    "macro.dbt_semantic_view.materialization_",
+    "macro.dbt_databricks.materialization_metric_view_",
+)
 # Node keys that vary per run or per machine.
 _VOLATILE_NODE_KEYS = ("created_at", "root_path", "build_path", "compiled_path", "deferred")
 
@@ -107,7 +125,7 @@ def trim_manifest(manifest: dict[str, Any]) -> dict[str, Any]:
     macros = {
         macro_id: {"unique_id": macro_id, "package_name": macro["package_name"]}
         for macro_id, macro in manifest.get("macros", {}).items()
-        if macro_id.startswith(_KEPT_MACRO_PREFIX)
+        if macro_id.startswith(_KEPT_MACRO_PREFIXES)
     }
     trimmed = {
         "metadata": {k: metadata[k] for k in _METADATA_KEYS if k in metadata},
@@ -204,14 +222,27 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0] if __doc__ else None)
     parser.add_argument("--fusion", help="path to the dbt Fusion binary")
     parser.add_argument("--core", help="path to a dbt Core `dbt` executable")
+    parser.add_argument(
+        "--core-databricks",
+        help="path to a dbt Core `dbt` with dbt-databricks installed (default: --core)",
+    )
+    parser.add_argument(
+        "--sets", nargs="+", choices=[s[0] for s in SETS], help="only these artifact sets"
+    )
     args = parser.parse_args(argv)
+    chosen = [s for s in SETS if args.sets is None or s[0] in args.sets]
+    keys: set[EngineKey] = {key for _, _, key, _ in chosen}
     try:
-        engines = {
-            "Fusion": find_engine("Fusion", args.fusion),
-            "dbt Core": find_engine("dbt Core", args.core),
+        finders: dict[EngineKey, Callable[[], Engine]] = {
+            "Fusion": lambda: find_engine("Fusion", args.fusion),
+            "dbt Core": lambda: find_engine("dbt Core", args.core),
+            "dbt Core (Databricks)": lambda: find_engine(
+                "dbt Core", args.core_databricks or args.core
+            ),
         }
-        for set_name, project, kind, target in SETS:
-            regen_set(set_name, project, engines[kind], target)
+        engines = {key: finders[key]() for key in keys}
+        for set_name, project, key, target in chosen:
+            regen_set(set_name, project, engines[key], target)
     except RegenError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1

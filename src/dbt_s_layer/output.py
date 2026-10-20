@@ -93,7 +93,8 @@ def _export_header(model: ExportModel) -> str:
 
 
 def _semantic_header(model: SemanticViewModel) -> str:
-    return f"{_SQL_MARK} from semantic model {model.semantic_model!r}. {_DO_NOT_EDIT}\n"
+    mark = _YAML_MARK if model.comment_prefix == "#" else _SQL_MARK
+    return f"{mark} from semantic model {model.semantic_model!r}. {_DO_NOT_EDIT}\n"
 
 
 def _schema_file(
@@ -328,13 +329,19 @@ def render_output(
 
 
 def _is_generated(path: Path) -> bool:
-    mark = _YAML_MARK if path.name == SCHEMA_FILE else _SQL_MARK
+    if path.name == SCHEMA_FILE:
+        marks: tuple[str, ...] = (_YAML_MARK,)
+    elif path.name.startswith("sem__"):
+        # A Databricks metric view's body is YAML, so its header is a YAML comment.
+        marks = (_SQL_MARK, _YAML_MARK)
+    else:
+        marks = (_SQL_MARK,)
     try:
         with path.open("rb") as handle:
             first = handle.readline()
     except OSError:
         return False
-    return first.decode("utf-8", errors="replace").startswith(mark)
+    return first.decode("utf-8", errors="replace").startswith(marks)
 
 
 def _owned_on_disk(output_dir: Path) -> dict[str, bytes]:

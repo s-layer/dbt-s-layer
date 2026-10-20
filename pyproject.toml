@@ -5,7 +5,7 @@ description = "dbt Cloud semantic-layer features for dbt Core / Fusion users"
 readme = "README.md"
 license = "Apache-2.0"
 authors = [
-    { name = "paul", email = "ego@anentropic.com" }
+    { name = "Anentropic", email = "ego@anentropic.com" }
 ]
 requires-python = ">=3.11"
 dependencies = [

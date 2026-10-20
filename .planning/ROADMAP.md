@@ -20,7 +20,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 3: File Output + CLI** - Atomic byte-stable writer, `generate` / `check` commands, companion YAML
 - [x] **Phase 4: Snowflake Adapter** - `sem__*.sql` via `dbt_semantic_view` package (HIGH RISK)
 - [x] **Phase 5: Pre-Commit Hook** - `.pre-commit-hooks.yaml` triggering regeneration on YAML changes
-- [ ] **Phase 6: Databricks Adapter** - `sem__*.sql` via `dbt-databricks` metric view materialisation (dbt-databricks >= 1.12.0, GA)
+- [x] **Phase 6: Databricks Adapter** - `sem__*.sql` via `dbt-databricks` metric view materialisation (dbt-databricks >= 1.12.0, GA)
 - [ ] **Phase 7: DuckDB Adapter** - `sem__*.sql` via `duckdb-semantic-views` extension
 - [ ] **Phase 8: v1 Release Hardening** - Docs, versioning, publish pipeline, final verification
 
@@ -128,7 +128,8 @@ Decimal phases appear between their surrounding integers in numeric order.
   2. Entities, dimensions, and measures in the generated config match the semantic YAML definitions
   3. Every upstream table reference is expressed as `{{ ref(...) }}` or `{{ source(...) }}` so DAG edges are correct
   4. `dbt run --target databricks` on a fixture project materialises every `sem__*.sql` as a Databricks metric view
-**Plans**: TBD
+**Plans**: 1 plan
+- [x] 06-01-PLAN.md — IR, renderer, dispatch and doctor, fixtures and compile test, README
 **Research flag**: MEDIUM — metric views shipped GA in dbt-databricks 1.12.0 (latest 1.12.7); verify the metric view config schema before planning.
 
 ### Phase 7: DuckDB Adapter
@@ -165,7 +166,7 @@ Phases execute in numeric order: 0 → 1 → 2 → 3 → 4 → 5 → 6 → 7 →
 | 3. File Output + CLI | 3/3 | Complete | 2026-10-19 |
 | 4. Snowflake Adapter | 4/4 | Complete | 2026-10-19 |
 | 5. Pre-Commit Hook | 3/3 | Complete | 2026-10-19 |
-| 6. Databricks Stub Adapter | 0/TBD | Not started | - |
+| 6. Databricks Adapter | 1/1 | Complete | 2026-10-20 |
 | 7. DuckDB Custom Materialisation | 0/TBD | Not started | - |
 | 8. v1 Release Hardening | 0/TBD | Not started | - |
 

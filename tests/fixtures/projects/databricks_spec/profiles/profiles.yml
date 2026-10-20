@@ -1,0 +1,16 @@
+# Dummy credentials: `dbt parse` and `dbt compile` never connect (dbt Core compiles with
+# --no-populate-cache). Both engines use the `databricks` target.
+fx:
+  target: duckdb
+  outputs:
+    databricks:
+      type: databricks
+      host: dummy.cloud.databricks.com
+      http_path: /sql/1.0/warehouses/dummy
+      token: dummy
+      catalog: main
+      schema: marts
+    duckdb:
+      type: duckdb
+      path: ":memory:"
+      schema: marts
