@@ -429,6 +429,23 @@ def test_a_field_cannot_shadow_a_column_another_expr_uses() -> None:
         render_databricks(spec)
 
 
+def test_a_measure_name_does_not_capture_a_column_in_a_dimension() -> None:
+    # On Databricks (checked on a workspace), a bare name in a dimension expr is the
+    # column, never a measure: measures are reached only through MEASURE().
+    is_big = DimensionSpec(table="orders", name="is_big", expr="revenue > 100")
+    revenue = replace(REVENUE, expr="revenue")
+    loaded = _load(_render(_view(dimensions=(ORDERED_AT, is_big), metrics=(revenue,))).body)
+    assert [d["expr"] for d in loaded["dimensions"]] == ["source.ordered_at", "revenue > 100"]
+
+
+def test_a_measure_name_still_counts_inside_another_measure() -> None:
+    # Untested on a workspace, so a measure expr keeps the conservative rule.
+    revenue = replace(REVENUE, expr="revenue * fx_rate")
+    total = MetricSpec(table="orders", name="fx_rate", agg="max", expr="rate")
+    with pytest.raises(SemanticViewError, match="fx_rate"):
+        render_databricks(_view(metrics=(revenue, total)))
+
+
 def test_a_field_that_is_its_own_column_is_harmless() -> None:
     amount = DimensionSpec(table="orders", name="amount", expr="amount")
     spec = _view(dimensions=(ORDERED_AT, amount), metrics=(replace(REVENUE, expr="amount - tax"),))
