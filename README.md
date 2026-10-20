@@ -31,6 +31,10 @@ git add models/semantic
 dbt build
 ```
 
+On Snowflake, the generated semantic views also need the `dbt_semantic_view` package: add it
+to `packages.yml` and run `dbt deps` before `dbt build` (see
+[Install the package](#install-the-package)).
+
 `generate` writes an `exp__<saved_query>__<export>.sql` model for each export and, on
 Snowflake and Databricks, a `sem__<semantic_model>.sql` view for each semantic model, into
 `models/semantic/`. `dbt build` then materialises them like any other model. To keep them in
