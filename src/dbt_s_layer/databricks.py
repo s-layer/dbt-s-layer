@@ -218,14 +218,18 @@ def _check_shadowing(view: str, elements: list[_Element]) -> None:
     Refuse an element whose name would capture a column another element's expr uses.
 
     Metric view expressions can use earlier fields by name, so a field `amount`
-    defined as `amount * 100` could change a measure `SUM(amount - tax)`. A plain
-    column is written `source.<col>` and is never captured.
+    defined as `amount * 100` changes a measure `SUM(amount - tax)` (seen on a
+    workspace: the dimension wins). A plain column is written `source.<col>` and is
+    never captured. A dimension expr reaches measures only through `MEASURE()`, so a
+    measure's name cannot capture a column there.
     """
     for element in elements:
         if element.kind == "dimension" and element.expr.strip().lower() == element.name.lower():
             continue
         for other in elements:
             if other is element or is_bare_identifier(other.expr):
+                continue
+            if element.kind == "metric" and other.kind == "dimension":
                 continue
             if element.name.lower() in column_references(other.expr, ""):
                 raise SemanticViewError(
