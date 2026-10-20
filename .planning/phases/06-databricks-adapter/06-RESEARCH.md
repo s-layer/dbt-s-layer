@@ -354,6 +354,9 @@ Exprs are copied verbatim (a Databricks project's YAML is Databricks SQL).
 
 ## 5. Fusion and metric views
 
+> Superseded (2026-10-20, 06-VERIFICATION.md): on a real workspace `dbt build` of the
+> generated metric views succeeds on Fusion 2.0.8; the offline reading below was wrong.
+
 | Fact | Evidence | Confidence |
 |------|----------|------------|
 | Fusion 2.0.8 ships dbt-databricks' metric view macros (materialization, create, alter, replace) | `strings` on the binary; manifest `macros` has `macro.dbt_databricks.materialization_metric_view_databricks` and 9 related ids | HIGH (verified) |

@@ -79,7 +79,8 @@ maintainer's machine, as in Phase 4).
 - **Missing materialization.** On a Databricks target, when manifest.json has no
   `macro.dbt_databricks.materialization_metric_view_databricks` (dbt-databricks < 1.12.0),
   `generate`/`check` WARN, and `doctor --project-dir` reports it.
-- **Fusion.** Fusion 2.0.8 parses and compiles the files offline, but its adapter does not
+- **Fusion.** (Superseded by 06-VERIFICATION: `dbt build` of the metric views succeeds on
+  Fusion 2.0.8 against a real workspace.) Fusion 2.0.8 parses and compiles the files offline, but its adapter does not
   implement two calls the materialization makes, so `dbt run` of a metric view needs dbt Core +
   dbt-databricks today (06-RESEARCH §5). README says so; the smoke test checks it.
 - **Fixture and tests.** A `databricks_spec` project (Fusion) and a dbt Core twin if Core

@@ -23,7 +23,7 @@
 
 - [x] **SEMVW-01**: Tool generates one `sem__<semantic_model_name>.sql` dbt model for each `semantic_model`, containing the DDL or materialisation call for the target warehouse's native semantic object type
 - [x] **SEMVW-02**: Generated semantic view models for Snowflake target use the `dbt_semantic_view` package (Snowflake-Labs) materialisation, with entities, dimensions, and measures derived from the semantic model YAML
-- [ ] **SEMVW-03**: Generated semantic view models for Databricks target use the `dbt-databricks` metric view materialisation (`dbt-databricks >= 1.12.0` (GA), PR databricks/dbt-databricks#1285), with entities, dimensions, and measures derived from the semantic model YAML
+- [x] **SEMVW-03**: Generated semantic view models for Databricks target use the `dbt-databricks` metric view materialisation (`dbt-databricks >= 1.12.0` (GA), PR databricks/dbt-databricks#1285), with entities, dimensions, and measures derived from the semantic model YAML
 - [ ] **SEMVW-04**: Generated semantic view models for DuckDB target use the `duckdb-semantic-views` extension (https://anentropic.github.io/duckdb-semantic-views/), delegating to its materialisation in the same pattern as the Snowflake adapter
 - [x] **SEMVW-05**: Generated semantic view models include explicit `{{ ref() }}` and `{{ source() }}` calls for all upstream dbt nodes, so dbt's DAG parser registers correct lineage edges
 
@@ -103,7 +103,7 @@ Semantic model features v1 leaves out of semantic views (each is skipped with a 
 | EXPRT-05 | Phase 2 | Complete |
 | SEMVW-01 | Phase 4 | Complete (Snowflake; Databricks and DuckDB in Phases 6, 7) |
 | SEMVW-02 | Phase 4 | Complete |
-| SEMVW-03 | Phase 6 | Implemented; real-workspace smoke test pending |
+| SEMVW-03 | Phase 6 | Complete |
 | SEMVW-04 | Phase 7 | Pending |
 | SEMVW-05 | Phase 4 | Complete |
 | OUTPT-01 | Phase 3 | Complete |

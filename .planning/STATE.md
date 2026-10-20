@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 6 executed; Databricks smoke test pending
+stopped_at: Phase 6 complete; Phase 7 next
 last_updated: "2026-10-19T21:00:00.000Z"
-last_activity: 2026-10-19 -- Phase 6 researched, planned and executed
+last_activity: 2026-10-20 -- Phase 6 verified on a real Databricks workspace
 progress:
   total_phases: 9
-  completed_phases: 6
+  completed_phases: 7
   total_plans: 22
   completed_plans: 22
-  percent: 67
+  percent: 78
 ---
 
 # Project State
@@ -27,10 +27,10 @@ See: .planning/PROJECT.md (updated 2026-04-19)
 
 Phase: 6 of 8 (Databricks Adapter)
 Plan: 1 of 1 in current phase
-Status: Executed; verification waits on a real-workspace smoke test
+Status: Complete; verified on a real workspace
 Last activity: 2026-10-19 -- Phase 6 executed (1 plan)
 
-Progress: [███████░░░] 6 of 9 phases (22 of 22 planned plans)
+Progress: [████████░░] 7 of 9 phases (22 of 22 planned plans)
 
 ## Performance Metrics
 
@@ -79,7 +79,7 @@ See `_notes/` directory for captured todos:
 ### Blockers/Concerns
 
 - Phase 4 generated Snowflake semantic views compile on dbt Core 1.12.6 and Fusion 2.0.8 but have never run on a real Snowflake account; a smoke run before v1 is the only proof that Snowflake accepts the DDL (key rules, NON ADDITIVE BY with qualified dimensions, percentile functions in metrics)
-- Phase 6 Databricks metric views compile on Fusion 2.0.8 and dbt Core 1.12.5 + dbt-databricks 1.12.7 but have not run on a workspace yet; Fusion 2.0.8 cannot `dbt run` them (06-RESEARCH §5), and dbt-databricks 1.12.7 needs dbt-core < 1.12.6
+- Phase 6 Databricks metric views build on a real workspace with Fusion 2.0.8 and dbt Core 1.12.5 + dbt-databricks 1.12.7 (06-VERIFICATION); dbt-databricks 1.12.7 needs dbt-core < 1.12.6
 - Phase 7 adds a DuckDB renderer to the dispatch in `render_semantic_views`; until then DuckDB warns once and gets no `sem__` files
 - dbt Core 1.12.6 cannot compile a project whose package holds a new-spec semantic model ("depends on 'semantic_model.fx.stores' which is not in the graph"), with or without dbt-s-layer; the Core compile test uses the legacy-spec twin `snowflake_legacy`
 - ~~Fusion 2.0.8 warns dbt0101 on the `exp__items_by_country` export SQL at compile~~ Resolved in review round 2: the cause was metricflow rendering the entity `order` unquoted (dbt-labs/metricflow#2058), which Snowflake also rejects; exports now quote reserved column names (`dbt_s_layer.quoting`)
@@ -94,5 +94,5 @@ See `_notes/` directory for captured todos:
 ## Session Continuity
 
 Last session: 2026-10-19
-Stopped at: Phase 6 executed; Databricks smoke test on the maintainer's Mac next
+Stopped at: Phase 6 complete; next Phase 7 (DuckDB) planning
 Resume file: None

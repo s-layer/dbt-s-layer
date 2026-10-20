@@ -201,9 +201,9 @@ differences:
 Metric view spec 1.1 needs Unity Catalog and Databricks Runtime 17.3 or later (or a SQL
 warehouse that supports it). With dbt-databricks older than 1.12.0, `dbt parse` and
 `dbt compile` still succeed but `dbt run` fails on the `sem__` models, so `generate`, `check`
-and `doctor` warn. The generated models compile on dbt Core 1.12.5 with dbt-databricks 1.12.7
-and on Fusion 2.0.8. Fusion 2.0.8 cannot run them yet (its Databricks adapter does not
-implement two calls the materialization makes), so use dbt Core to `dbt run` metric views.
+and `doctor` warn. The generated models have been built on a Databricks SQL warehouse with
+dbt Core 1.12.5 + dbt-databricks 1.12.7 and with Fusion 2.0.8, and every measure matched plain
+SQL over the same tables.
 
 ## What is left out of semantic and metric views
 
