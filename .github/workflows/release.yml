@@ -8,6 +8,12 @@ on:
       - "v[0-9]+.[0-9]+.[0-9]+[ab][0-9]*"
       - "v[0-9]+.[0-9]+.[0-9]+rc[0-9]*"
   workflow_dispatch:
+    inputs:
+      repository:
+        description: "Where to publish (a dry run goes to TestPyPI)"
+        type: choice
+        options: [testpypi, pypi]
+        default: testpypi
 
 jobs:
   quality:
@@ -67,6 +73,8 @@ jobs:
           uv venv --python ${{ matrix.python-version }} test-env-wheel
           uv pip install --python test-env-wheel/bin/python dist/*.whl
           test-env-wheel/bin/python -c "import dbt_s_layer; print('Wheel installation OK')"
+          test-env-wheel/bin/dbt-s-layer --version
+          test-env-wheel/bin/dbt-s-layer --help
 
       - name: Test sdist installation
         run: |
@@ -79,13 +87,14 @@ jobs:
           unzip -l dist/*.whl | grep "dbt_s_layer/py.typed" || (echo "ERROR: py.typed marker missing" && exit 1)
 
   publish:
-    name: Publish to PyPI
+    name: Publish to ${{ inputs.repository == 'testpypi' && 'TestPyPI' || 'PyPI' }}
     needs: [quality, validate]
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    # A tag push publishes to PyPI; a manual run defaults to TestPyPI.
     environment:
-      name: pypi
-      url: https://pypi.org/p/dbt-s-layer
+      name: ${{ inputs.repository == 'testpypi' && 'testpypi' || 'pypi' }}
+      url: ${{ inputs.repository == 'testpypi' && 'https://test.pypi.org/p/dbt-s-layer' || 'https://pypi.org/p/dbt-s-layer' }}
     permissions:
       id-token: write
       contents: read
@@ -96,12 +105,18 @@ jobs:
           name: dist
           path: dist/
 
-      - name: Publish to PyPI
+      - name: Publish
         uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: ${{ inputs.repository == 'testpypi' && 'https://test.pypi.org/legacy/' || 'https://upload.pypi.org/legacy/' }}
+          # TestPyPI keeps a version forever, so a repeat rehearsal skips files already there.
+          skip-existing: ${{ inputs.repository == 'testpypi' }}
 
   github-release:
     name: Create GitHub Release
     needs: [publish]
+    # Only a tag push releases: a manual run started on a tag must not create one.
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:

@@ -20,8 +20,26 @@ app = typer.Typer(
 )
 
 
+def _print_version(value: bool) -> None:
+    if value:
+        from importlib.metadata import version
+
+        typer.echo(f"dbt-s-layer {version('dbt-s-layer')}")
+        raise typer.Exit
+
+
 @app.callback()
-def _main() -> None:  # pyright: ignore[reportUnusedFunction]
+def _main(  # pyright: ignore[reportUnusedFunction]
+    _version: Annotated[
+        bool,
+        typer.Option(
+            "--version",
+            help="Print the installed dbt-s-layer version and exit.",
+            callback=_print_version,
+            is_eager=True,
+        ),
+    ] = False,
+) -> None:
     """
     Code-generate dbt models from the dbt semantic layer.
 

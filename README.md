@@ -13,6 +13,34 @@ A pre-commit hook keeps generated files in sync with YAML changes automatically.
 
 Alpha. Under active development.
 
+## Quick start
+
+Install dbt-s-layer next to the dbt engine and adapter you already use:
+
+```sh
+pip install dbt-s-layer dbt-core dbt-duckdb   # or dbt-snowflake, dbt-databricks
+```
+
+In a dbt project whose YAML has `semantic_models:`, `metrics:` and `saved_queries:` with
+`exports:`, parse, generate, commit and build:
+
+```sh
+dbt parse
+dbt-s-layer generate
+git add models/semantic
+dbt build
+```
+
+On Snowflake, the generated semantic views also need the `dbt_semantic_view` package: add it
+to `packages.yml` and run `dbt deps` before `dbt build` (see
+[Install the package](#install-the-package)).
+
+`generate` writes an `exp__<saved_query>__<export>.sql` model for each export and, on
+Snowflake and Databricks, a `sem__<semantic_model>.sql` view for each semantic model, into
+`models/semantic/`. `dbt build` then materialises them like any other model. To keep them in
+step with your YAML, add the [pre-commit hook](#pre-commit-hook); to catch a forgotten
+`generate` in CI, run `dbt-s-layer check`.
+
 ## Requirements
 
 - Python 3.11+
