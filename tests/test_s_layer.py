@@ -13,6 +13,7 @@ from dbt_s_layer.output import render_output
 from dbt_s_layer.project import load_project
 from dbt_s_layer.semantic_views import SemanticViewSpec, build_semantic_views
 from tests.conftest import ARTIFACT_SETS
+from tests.test_semantic_views import _simple
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -282,3 +283,79 @@ def _metric_input(name: str) -> Raw:
         "offset_window": None,
         "offset_to_grain": None,
     }
+
+
+def _with_granularity(grain: str, block: object) -> Callable[[Raw], None]:
+    def mutate(raw: Raw) -> None:
+        orders = _named(raw["semantic_models"], "orders")
+        ordered_at = _named(orders["dimensions"], "ordered_at")
+        ordered_at["type_params"]["time_granularity"] = grain
+        _set_meta(ordered_at, block)
+
+    return mutate
+
+
+def test_sub_day_grain_is_filled(make_project: MakeProject) -> None:
+    project_dir = make_project("core_new")
+    _semantic(project_dir, _with_granularity("hour", {"value": {"kind": "datetime"}}))
+    ordered_at = _named_spec(_view(project_dir, "orders").dimensions, "ordered_at")
+    assert ordered_at.s_layer is not None
+    assert ordered_at.s_layer.time is not None
+    assert ordered_at.s_layer.time.grain == "hour"
+
+
+def test_sub_second_grain_is_left_unstated(make_project: MakeProject) -> None:
+    """The vocabulary stops at seconds, so a finer dbt grain is not copied into the block."""
+    project_dir = make_project("core_new")
+    _semantic(project_dir, _with_granularity("millisecond", {"value": {"kind": "datetime"}}))
+    ordered_at = _named_spec(_view(project_dir, "orders").dimensions, "ordered_at")
+    assert ordered_at.s_layer == validate_block({"value": {"kind": "datetime"}}, "dimension")
+
+
+def test_date_kind_on_a_sub_day_dimension(make_project: MakeProject) -> None:
+    project_dir = make_project("core_new")
+    _semantic(project_dir, _with_granularity("hour", {"value": {"kind": "date"}}))
+    message = _error(project_dir)
+    assert "time_granularity 'hour'" in message
+    assert "use kind datetime" in message
+
+
+def test_invalid_entity_block(make_project: MakeProject) -> None:
+    project_dir = make_project("core_new")
+    _semantic(project_dir, _on_entity("orders", "order", USD))
+    message = _error(project_dir)
+    assert "entity 'order' of semantic model 'orders'" in message
+
+
+def test_legacy_non_additive_measure_states_no_aggregation(make_project: MakeProject) -> None:
+    """On the legacy spec the measure's non_additive_dimension reaches the metric too."""
+    project_dir = make_project("core_legacy")
+
+    def mutate(raw: Raw) -> None:
+        orders = _named(raw["semantic_models"], "orders")
+        _named(orders["measures"], "order_total")["non_additive_dimension"] = {
+            "name": "ordered_at",
+            "window_choice": "max",
+            "window_groupings": [],
+        }
+        _set_meta(
+            _named(raw["metrics"], "revenue"), {**USD, "aggregation": {"additivity": "additive"}}
+        )
+
+    _semantic(project_dir, mutate)
+    assert "non_additive_dimension" in _error(project_dir)
+
+
+def test_entity_block_left_out_of_the_view_warns(make_project: MakeProject) -> None:
+    """An entity that gives way to a metric is not a member, so its block would vanish."""
+    project_dir = make_project("fusion_new")
+
+    def mutate(raw: Raw) -> None:
+        raw["metrics"].append(_simple(raw, "customer", "orders", "count_distinct", "x"))
+        _on_entity("orders", "customer", {"value": {"kind": "identifier"}})(raw)
+
+    _semantic(project_dir, mutate)
+    build = build_semantic_views(load_project(project_dir))
+    assert any("entity 'customer'" in w and "s_layer block" in w for w in build.warnings), (
+        build.warnings
+    )

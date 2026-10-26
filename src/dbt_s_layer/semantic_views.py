@@ -627,6 +627,13 @@ class _Builder:
                 for e in sm.entities
                 if e.type in _JOIN_TYPES and e.name not in taken
             ]
+            warnings.update(
+                f"semantic views: the s_layer block of entity {e.name!r} of semantic model "
+                f"{alias!r} is not used: the entity is not a member of sem__{root}."
+                for e in sm.entities
+                if (alias, e.name) in self.blocks.entities
+                and (e.type not in _JOIN_TYPES or e.name in taken)
+            )
             dimensions += sorted(table_dims, key=lambda d: d.name)
         spec = SemanticViewSpec(
             name=root,

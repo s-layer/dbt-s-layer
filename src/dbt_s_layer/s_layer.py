@@ -37,6 +37,9 @@ if TYPE_CHECKING:
     from dbt_s_layer.project import SemanticProject
 
 META_KEY = "s_layer"
+# metricflow time granularities finer than the vocabulary's finest grain.
+_SUB_SECOND_GRAINS = frozenset({"millisecond", "microsecond", "nanosecond"})
+_SUB_DAY_GRAINS = frozenset({"hour", "minute", "second"}) | _SUB_SECOND_GRAINS
 
 
 @dataclass(frozen=True)
@@ -79,8 +82,16 @@ def _with_grain(block: SLayerBlock, raw: Mapping[str, Any], grain: str) -> SLaye
         raise ValueError(
             f"value.kind: a time dimension needs kind date or datetime, not {block.kind!r}"
         )
+    if block.kind == "date" and grain in _SUB_DAY_GRAINS:
+        raise ValueError(
+            f"value.kind: the dimension's time_granularity {grain!r} is finer than a date; "
+            "use kind datetime"
+        )
     stated = None if block.time is None else block.time.grain
     if stated is None:
+        if grain in _SUB_SECOND_GRAINS:
+            # The vocabulary's finest grain is a second: leave the grain unstated.
+            return block
         time = {**dict(raw.get("time") or {}), "grain": grain}
         return validate_block({**raw, "time": time}, "dimension")
     if stated != grain:

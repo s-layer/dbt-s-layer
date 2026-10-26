@@ -262,6 +262,8 @@ nothing reaches the warehouse. Beyond the vocabulary's own rules:
 - A metric with a `non_additive_dimension` already says how it adds up, so its block leaves
   `aggregation` out.
 - Measures' meta is not read (Fusion copies a metric's meta onto the measure it generates).
+- An entity's block is read from the entity's own `config.meta` only. dbt-s-layer merges
+  column meta into dimensions, not entities.
 
 ## What is left out of semantic and metric views
 
