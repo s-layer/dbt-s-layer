@@ -19,6 +19,7 @@ from metricflow_semantic_interfaces.type_enums.aggregation_type import Aggregati
 from metricflow_semantic_interfaces.type_enums.entity_type import EntityType
 from metricflow_semantic_interfaces.type_enums.metric_type import MetricType
 
+from dbt_s_layer._project_yaml import read_dbt_project
 from dbt_s_layer.errors import SemanticViewError
 from dbt_s_layer.refs import build_ref_map
 from dbt_s_layer.s_layer import read_s_layer_blocks
@@ -775,6 +776,15 @@ def render_semantic_views(project: SemanticProject, *, adapter: str) -> Semantic
             f"has no {snowflake.MATERIALIZATION_MACRO}). Add Snowflake-Labs/{snowflake.PACKAGE} "
             "to packages.yml and run `dbt deps`; until then `dbt run` fails on the sem__ models."
         )
+    if adapter == "snowflake" and any("S_LAYER_KIND" in m.body for m in models):
+        hooks = read_dbt_project(project.project_dir).get("on-run-start")
+        if "S_LAYER_KIND" not in str(hooks):
+            warnings.add(
+                "semantic views: members with an s_layer block carry the tags S_LAYER_KIND, "
+                "S_LAYER_LABEL and S_LAYER_SPEC, but dbt_project.yml has no on-run-start hook "
+                'that creates them. Add the hooks from the README section "Snowflake tags"; '
+                "until then `dbt run` fails on the sem__ models."
+            )
     if (
         adapter == "databricks"
         and databricks.MATERIALIZATION_MACRO not in project.dbt_manifest.macros

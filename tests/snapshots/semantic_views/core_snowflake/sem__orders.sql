@@ -1,4 +1,5 @@
 {{ config(materialized='semantic_view', static_analysis='off') }}
+{%- set s_layer_tags = var('s_layer_tag_schema', target.database ~ '.' ~ target.schema) %}
 
 TABLES (
   orders AS {{ ref('orders') }}
@@ -15,9 +16,9 @@ RELATIONSHIPS (
 )
 DIMENSIONS (
   orders.customer AS customer_id,
-  orders."ORDER" AS order_id,
-  orders.ordered_at AS ordered_at,
-  orders.status AS status,
+  orders."ORDER" AS order_id WITH TAG ({{ s_layer_tags }}.S_LAYER_KIND = 'identifier', {{ s_layer_tags }}.S_LAYER_SPEC = '{"display":{"grouping":false}}'),
+  orders.ordered_at AS ordered_at WITH TAG ({{ s_layer_tags }}.S_LAYER_KIND = 'date', {{ s_layer_tags }}.S_LAYER_SPEC = '{"time":{"grain":"day"}}'),
+  orders.status AS status WITH SYNONYMS = ('order status') WITH TAG ({{ s_layer_tags }}.S_LAYER_KIND = 'category'),
   orders.store AS store_id,
   customers.country AS country,
   customers.customer AS customer_id,
@@ -29,9 +30,9 @@ DIMENSIONS (
 METRICS (
   orders.latest_revenue NON ADDITIVE BY (orders.ordered_at ASC) AS SUM(amount),
   orders.order_count AS COUNT(DISTINCT order_id) COMMENT = 'Distinct orders.',
-  orders.revenue AS SUM(amount),
+  orders.revenue AS SUM(amount) WITH SYNONYMS = ('sales', 'turnover') WITH TAG ({{ s_layer_tags }}.S_LAYER_KIND = 'currency', {{ s_layer_tags }}.S_LAYER_LABEL = 'Revenue', {{ s_layer_tags }}.S_LAYER_SPEC = '{"display":{"decimals":[0,0],"grouping":true,"negative":"minus"},"value":{"currency":"USD"}}'),
   orders.revenue_p90 AS PERCENTILE_DISC(0.9) WITHIN GROUP (ORDER BY amount),
-  average_order_value AS orders.revenue / NULLIF(orders.order_count, 0),
+  average_order_value AS orders.revenue / NULLIF(orders.order_count, 0) WITH TAG ({{ s_layer_tags }}.S_LAYER_KIND = 'currency', {{ s_layer_tags }}.S_LAYER_LABEL = 'AOV', {{ s_layer_tags }}.S_LAYER_SPEC = '{"display":{"grouping":true,"negative":"minus"},"value":{"currency":"USD"}}'),
   revenue_doubled AS orders.revenue * 2
 )
 COMMENT = 'One row per order. It''s the ''fact'' table.'

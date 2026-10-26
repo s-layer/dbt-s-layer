@@ -13,11 +13,15 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from dbt_s_layer.errors import SemanticViewError
+from s_layer_semantic_formats import SpecTooLongError, spec_tag_value
+
+from dbt_s_layer.errors import SemanticViewError, SLayerBlockError
 from dbt_s_layer.semantic_views import MetricRef, SqlToken, scan_sql
 from dbt_s_layer.sentinels import escape_jinja, postflight
 
 if TYPE_CHECKING:
+    from s_layer_semantic_formats import SLayerBlock
+
     from dbt_s_layer.semantic_views import (
         DerivedMetricSpec,
         DimensionSpec,
@@ -30,6 +34,16 @@ PACKAGE = "dbt_semantic_view"
 # In manifest.json `macros` when the package is installed (04-RESEARCH §4).
 MATERIALIZATION_MACRO = "macro.dbt_semantic_view.materialization_semantic_view_snowflake"
 CONFIG = "{{ config(materialized='semantic_view', static_analysis='off') }}"
+# Where the S_LAYER_* tag objects live: a Jinja expression for '<database>.<schema>'.
+TAG_SCHEMA = "var('s_layer_tag_schema', target.database ~ '.' ~ target.schema)"
+# dbt_project.yml `on-run-start` entries that create the tag objects (README: "Snowflake tags").
+TAG_HOOKS = (
+    f'"create schema if not exists {{{{ {TAG_SCHEMA} }}}}"',
+    *(
+        f'"create tag if not exists {{{{ {TAG_SCHEMA} }}}}.{name}"'
+        for name in ("S_LAYER_KIND", "S_LAYER_LABEL", "S_LAYER_SPEC")
+    ),
+)
 
 # https://docs.snowflake.com/en/sql-reference/reserved-keywords (fetched 2026-10-19).
 RESERVED_WORDS = frozenset(
@@ -207,6 +221,36 @@ def _comment(text: str | None) -> str:
     return "" if text is None else f" COMMENT = {escape_jinja(sql_string(text))}"
 
 
+def _s_layer(member: str, block: SLayerBlock | None, label: str | None) -> str:
+    """
+    Return a member's S-LAYER slots: `WITH SYNONYMS`, then `WITH TAG`.
+
+    Snowflake accepts them only in that order, before `COMMENT`. Only members with
+    an `s_layer` block get them. The tag names are qualified with the
+    `s_layer_tags` schema set at the top of the body; S_LAYER_SPEC is left out
+    when the block says nothing beyond its kind.
+    """
+    if block is None:
+        return ""
+    text = ""
+    if block.synonyms:
+        names = ", ".join(escape_jinja(sql_string(name)) for name in block.synonyms)
+        text += f" WITH SYNONYMS = ({names})"
+    tags = [("S_LAYER_KIND", block.kind)]
+    if label is not None:
+        tags.append(("S_LAYER_LABEL", label))
+    try:
+        spec = spec_tag_value(block)
+    except SpecTooLongError as exc:
+        raise SLayerBlockError(f"{member}: {exc}") from None
+    if spec != "{}":
+        tags.append(("S_LAYER_SPEC", spec))
+    values = ", ".join(
+        f"{{{{ s_layer_tags }}}}.{name} = {escape_jinja(sql_string(value))}" for name, value in tags
+    )
+    return f"{text} WITH TAG ({values})"
+
+
 def _qualified(table: str, name: str) -> str:
     return f"{quote_identifier(table)}.{quote_identifier(name)}"
 
@@ -242,7 +286,9 @@ def _table(table: TableSpec) -> str:
 
 def _dimension(dimension: DimensionSpec) -> str:
     name = _qualified(dimension.table, dimension.name)
-    return f"  {name} AS {_expr(dimension.expr)}{_comment(dimension.comment)}"
+    member = f"dimension {dimension.name!r} of semantic model {dimension.table!r}"
+    slots = _s_layer(member, dimension.s_layer, dimension.label)
+    return f"  {name} AS {_expr(dimension.expr)}{slots}{_comment(dimension.comment)}"
 
 
 def _aggregate(view: str, metric: MetricSpec) -> str:
@@ -276,7 +322,8 @@ def _metric(view: str, metric: MetricSpec) -> str:
         non_additive = f" NON ADDITIVE BY ({dimension} {order})"
     name = _qualified(metric.table, metric.name)
     aggregate = _aggregate(view, metric)
-    return f"  {private}{name}{non_additive} AS {aggregate}{_comment(metric.comment)}"
+    slots = _s_layer(f"metric {metric.name!r}", metric.s_layer, metric.label)
+    return f"  {private}{name}{non_additive} AS {aggregate}{slots}{_comment(metric.comment)}"
 
 
 def _derived(metric: DerivedMetricSpec) -> str:
@@ -284,7 +331,8 @@ def _derived(metric: DerivedMetricSpec) -> str:
         _qualified(p.table, p.name) if isinstance(p, MetricRef) else _expr(p) for p in metric.parts
     )
     private = "PRIVATE " if metric.private else ""
-    return f"  {private}{quote_identifier(metric.name)} AS {expr}{_comment(metric.comment)}"
+    slots = _s_layer(f"metric {metric.name!r}", metric.s_layer, metric.label)
+    return f"  {private}{quote_identifier(metric.name)} AS {expr}{slots}{_comment(metric.comment)}"
 
 
 # --- name shadowing (04-RESEARCH, open risk 2) ------------------------------------
@@ -437,6 +485,10 @@ def render_snowflake(spec: SemanticViewSpec) -> str:
         parts.append(_clause("METRICS", metrics))
     if spec.comment is not None:
         parts.append(f"COMMENT = {escape_jinja(sql_string(spec.comment))}\n")
-    body = f"{CONFIG}\n\n" + "".join(parts)
+    members = (*spec.dimensions, *spec.metrics, *spec.derived_metrics)
+    header = CONFIG
+    if any(m.s_layer is not None for m in members):
+        header += f"\n{{%- set s_layer_tags = {TAG_SCHEMA} %}}"
+    body = f"{header}\n\n" + "".join(parts)
     postflight(body, context=f"sem__{spec.name}.sql")
     return body
