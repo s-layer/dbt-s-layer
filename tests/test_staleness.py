@@ -209,6 +209,8 @@ def test_fresh_core_artifacts_warn_about_the_versioned_model(make_project: MakeP
     assert "models/marts/customers.yml" in warning
     assert "dbt Core 1.12.6" in warning
     assert "versioned" in warning
+    # The metric declared on the dropped model is gone too.
+    assert "'cust_total'" in warning
 
 
 @pytest.mark.parametrize("set_name", ["fusion_new", "core_legacy"])

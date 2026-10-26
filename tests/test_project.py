@@ -65,6 +65,39 @@ def test_legacy_and_new_spec_core_sets_agree(make_project: MakeProject) -> None:
     ]
 
 
+# dbt Core merges a column's `config.meta` into its new-spec dimension's, the
+# dimension's own keys winning. Fusion writes only the dimension's own.
+ORDERED_AT_META = {"source": "dimension", "column_only": True, "dimension_only": True}
+
+
+def _dimension_meta(project_dir: Path, model: str, dimension: str) -> dict[str, object] | None:
+    manifest = load_project(project_dir).semantic_manifest
+    semantic_model = next(sm for sm in manifest.semantic_models if sm.name == model)
+    found = next(d for d in semantic_model.dimensions if d.name == dimension)
+    return None if found.config is None else dict(found.config.meta)
+
+
+@pytest.mark.parametrize("set_name", ["fusion_new", "core_new"])
+def test_new_spec_dimension_meta_includes_column_meta(
+    set_name: str, make_project: MakeProject
+) -> None:
+    assert _dimension_meta(make_project(set_name), "orders", "ordered_at") == ORDERED_AT_META
+
+
+def test_dimension_meta_is_the_same_from_either_engine(make_project: MakeProject) -> None:
+    def all_meta(set_name: str) -> dict[tuple[str, str], object]:
+        manifest = load_project(make_project(set_name)).semantic_manifest
+        return {
+            (sm.name, d.name): None if d.config is None else dict(d.config.meta)
+            for sm in manifest.semantic_models
+            # dbt Core drops `customers` (a versioned model).
+            if sm.name != "customers"
+            for d in sm.dimensions
+        }
+
+    assert all_meta("fusion_new") == all_meta("core_new")
+
+
 def test_project_is_frozen(make_project: MakeProject) -> None:
     project = load_project(make_project("core_new"))
     with pytest.raises(FrozenInstanceError):
