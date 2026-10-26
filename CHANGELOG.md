@@ -24,6 +24,9 @@ All notable changes to this project are documented here. The format follows
   files. Dimension `meta` reads the same from either engine: a column's `config.meta` is merged
   into its dimension's, as dbt Core does, although Fusion leaves it out of
   `semantic_manifest.json`.
+- `s_layer` blocks in a metric's, dimension's or entity's `config.meta` are validated against
+  the S-LAYER vocabulary ([s-layer-semantic-formats](https://github.com/s-layer/semantic-formats));
+  `generate` and `check` stop on an invalid block, naming each one.
 
 ### Known limitations
 

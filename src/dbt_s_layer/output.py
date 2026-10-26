@@ -22,6 +22,7 @@ from ruamel.yaml import YAML
 from dbt_s_layer._project_yaml import read_dbt_project
 from dbt_s_layer.errors import ModelClashError, OutputConflictError
 from dbt_s_layer.exports import render_exports
+from dbt_s_layer.s_layer import read_s_layer_blocks
 from dbt_s_layer.semantic_views import render_semantic_views
 
 if TYPE_CHECKING:
@@ -307,6 +308,8 @@ def render_output(
     that clash with the project's own. The result's `warnings` lists what the
     user should know: features left out of semantic views, a missing package.
     """
+    # A bad block stops every adapter, even one with no semantic view renderer yet.
+    read_s_layer_blocks(project)
     exports = render_exports(project, adapter=adapter)
     adapter = adapter or project.dbt_manifest.metadata.adapter_type
     # render_exports has already refused a missing adapter.

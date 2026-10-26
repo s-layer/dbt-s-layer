@@ -58,3 +58,7 @@ class ModelClashError(DbtSLayerError):
 
 class SemanticViewError(DbtSLayerError):
     """A semantic model cannot be turned into a semantic view as it stands."""
+
+
+class SLayerBlockError(DbtSLayerError):
+    """A `config.meta.s_layer` block is not valid S-LAYER vocabulary for its member."""

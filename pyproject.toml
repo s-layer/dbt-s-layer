@@ -23,6 +23,7 @@ dependencies = [
     "metricflow==0.213.0",
     # Reads dbt_project.yml and semantic YAML (Phase 1); writes generated YAML (Phase 3).
     "ruamel-yaml>=0.18",
+    "s-layer-semantic-formats>=0.1,<0.2",
 ]
 
 [project.scripts]

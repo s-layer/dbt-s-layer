@@ -21,6 +21,7 @@ from metricflow_semantic_interfaces.type_enums.metric_type import MetricType
 
 from dbt_s_layer.errors import SemanticViewError
 from dbt_s_layer.refs import build_ref_map
+from dbt_s_layer.s_layer import read_s_layer_blocks
 from dbt_s_layer.sentinels import render_ref
 
 if TYPE_CHECKING:
@@ -33,6 +34,7 @@ if TYPE_CHECKING:
     from metricflow_semantic_interfaces.implementations.semantic_model import (
         PydanticSemanticModel,
     )
+    from s_layer_semantic_formats import SLayerBlock
 
     from dbt_s_layer.project import SemanticProject
 
@@ -102,6 +104,8 @@ class DimensionSpec:
     expr: str
     comment: str | None = None
     label: str | None = None
+    # The member's `config.meta.s_layer` block, validated.
+    s_layer: SLayerBlock | None = None
 
 
 @dataclass(frozen=True)
@@ -134,6 +138,8 @@ class MetricSpec:
     private: bool = False
     comment: str | None = None
     label: str | None = None
+    # The member's `config.meta.s_layer` block, validated.
+    s_layer: SLayerBlock | None = None
 
 
 @dataclass(frozen=True)
@@ -153,6 +159,8 @@ class DerivedMetricSpec:
     private: bool = False
     comment: str | None = None
     label: str | None = None
+    # The member's `config.meta.s_layer` block, validated.
+    s_layer: SLayerBlock | None = None
 
 
 @dataclass(frozen=True)
@@ -299,6 +307,7 @@ class _Builder:
     def __init__(self, project: SemanticProject, adapter: str) -> None:
         self.adapter = adapter
         self.warnings: set[str] = set()
+        self.blocks = read_s_layer_blocks(project)
         self.models: dict[str, PydanticSemanticModel] = {
             sm.name.lower(): sm for sm in project.semantic_manifest.semantic_models
         }
@@ -482,6 +491,7 @@ class _Builder:
             private=bool(params.is_private),
             comment=_description(metric.description),
             label=_label(metric.label, metric.name),
+            s_layer=self.blocks.metrics.get(metric.name),
         )
 
     def _derived_metrics(self, metrics: Iterable[PydanticMetric]) -> dict[str, DerivedMetricSpec]:
@@ -520,6 +530,7 @@ class _Builder:
                 private=bool(params.is_private),
                 comment=_description(metric.description),
                 label=_label(metric.label, metric.name),
+                s_layer=self.blocks.metrics.get(metric.name),
             )
         return specs
 
@@ -600,6 +611,7 @@ class _Builder:
                     d.expr or d.name,
                     _description(d.description),
                     _label(d.label, d.name),
+                    self.blocks.dimensions.get((alias, d.name)),
                 )
                 for d in sm.dimensions
             ]
@@ -610,10 +622,18 @@ class _Builder:
                     e.expr or e.name,
                     _description(e.description),
                     _label(e.label, e.name),
+                    self.blocks.entities.get((alias, e.name)),
                 )
                 for e in sm.entities
                 if e.type in _JOIN_TYPES and e.name not in taken
             ]
+            warnings.update(
+                f"semantic views: the s_layer block of entity {e.name!r} of semantic model "
+                f"{alias!r} is not used: the entity is not a member of sem__{root}."
+                for e in sm.entities
+                if (alias, e.name) in self.blocks.entities
+                and (e.type not in _JOIN_TYPES or e.name in taken)
+            )
             dimensions += sorted(table_dims, key=lambda d: d.name)
         spec = SemanticViewSpec(
             name=root,
