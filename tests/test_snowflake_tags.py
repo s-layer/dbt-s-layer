@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -173,3 +174,73 @@ def test_on_run_start_snippet_is_documented() -> None:
     readme = (Path(__file__).parents[1] / "README.md").read_text()
     for line in TAG_HOOKS:
         assert line in readme
+
+
+# --- tag value limits -----------------------------------------------------------------
+
+
+def test_label_over_the_tag_limit_is_an_error() -> None:
+    region = replace(
+        REGION, label="x" * 257, s_layer=_block({"value": {"kind": "category"}}, "dimension")
+    )
+    with pytest.raises(SLayerBlockError, match="dimension 'region'.*S_LAYER_LABEL.*256"):
+        render_snowflake(_view(dimensions=(region,)))
+
+
+def test_entity_errors_name_the_entity() -> None:
+    block = _block({"value": {"kind": "identifier"}, "x-acme": {"note": "x" * 300}}, "dimension")
+    entity = replace(REGION, entity=True, s_layer=block)
+    with pytest.raises(SLayerBlockError, match="^entity 'region' of semantic model 'orders'"):
+        render_snowflake(_view(dimensions=(entity,)))
+
+
+def _too_long(raw: dict[str, Any]) -> None:
+    long = {"value": {"kind": "category"}, "x-acme": {"note": "x" * 300}}
+    orders = next(sm for sm in raw["semantic_models"] if sm["name"] == "orders")
+    status = next(d for d in orders["dimensions"] if d["name"] == "status")
+    status["config"] = {"meta": {"s_layer": long}}
+    revenue = next(m for m in raw["metrics"] if m["name"] == "revenue")
+    revenue["config"] = {"meta": {"s_layer": {**long, "value": {"kind": "count"}}}}
+
+
+@pytest.mark.parametrize("set_name", SNOWFLAKE_SETS)
+def test_every_over_long_value_is_reported_once(set_name: str, make_project: MakeProject) -> None:
+    """One run names every member whose tag value is too long, once each."""
+    project_dir = make_project(set_name)
+    path = project_dir / "target" / "semantic_manifest.json"
+    raw = json.loads(path.read_text())
+    _too_long(raw)
+    path.write_text(json.dumps(raw))
+    with pytest.raises(SLayerBlockError) as caught:
+        render_semantic_views(load_project(project_dir), adapter="snowflake")
+    message = str(caught.value)
+    assert message.startswith("tag values too long for Snowflake (2 problems): ")
+    assert message.count("dimension 'status' of semantic model 'orders'") == 1
+    assert message.count("metric 'revenue'") == 1
+
+
+# --- the hook check -------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("set_name", SNOWFLAKE_SETS)
+def test_partial_tag_hooks_warn(set_name: str, make_project: MakeProject) -> None:
+    project_dir = make_project(set_name)
+    path = project_dir / "dbt_project.yml"
+    kind_only = [hook for hook in TAG_HOOKS if "S_LAYER_LABEL" not in hook]
+    kind_only = [hook for hook in kind_only if "S_LAYER_SPEC" not in hook]
+    hooks = "".join(f"  - {hook}\n" for hook in kind_only)
+    path.write_text(path.read_text() + "on-run-start:\n" + hooks)
+    result = render_semantic_views(load_project(project_dir), adapter="snowflake")
+    [warning] = [w for w in result.warnings if "on-run-start" in w]
+    assert "S_LAYER_LABEL, S_LAYER_SPEC" in warning
+
+
+def test_tag_name_in_a_comment_is_not_a_tagged_view(make_project: MakeProject) -> None:
+    project_dir = make_project("core_new")
+    path = project_dir / "target" / "semantic_manifest.json"
+    raw = json.loads(path.read_text())
+    raw["semantic_models"][0]["description"] = "Mentions S_LAYER_KIND in passing."
+    path.write_text(json.dumps(raw))
+    result = render_semantic_views(load_project(project_dir), adapter="snowflake")
+    assert any("S_LAYER_KIND" in m.body for m in result.models)
+    assert not [w for w in result.warnings if "on-run-start" in w]
