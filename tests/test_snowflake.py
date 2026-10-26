@@ -499,6 +499,20 @@ def test_date_parts_are_not_references(name: str, other_expr: str) -> None:
 
 
 @pytest.mark.parametrize(
+    ("name", "other_expr"),
+    [
+        ("date", "ordered_at > DATE '2024-01-01'"),
+        ("timestamp", "TIMESTAMP '2024-01-01 00:00:00' < ordered_at"),
+        ("first", "ARRAY_AGG(status) WITHIN GROUP (ORDER BY ordered_at NULLS FIRST)"),
+    ],
+)
+def test_typed_literals_and_nulls_order_are_not_references(name: str, other_expr: str) -> None:
+    element = DimensionSpec(table="orders", name=name, expr="ordered_at::date")
+    other = DimensionSpec(table="orders", name="other", expr=other_expr)
+    render_snowflake(_view(dimensions=(element, other)))
+
+
+@pytest.mark.parametrize(
     "metric_expr",
     [
         "year",  # a column, not a date part

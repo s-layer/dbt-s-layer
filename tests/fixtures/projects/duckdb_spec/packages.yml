@@ -1,0 +1,5 @@
+packages:
+  - local: packages/fx_dep
+  # The `semantic_view` materialization for DuckDB, pinned until it is on dbt hub.
+  - git: https://github.com/s-layer/dbt-duckdb-semantic-views.git
+    revision: afd0980e70800f630aae32f40ee41bc0812e75f4

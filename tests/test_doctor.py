@@ -414,7 +414,8 @@ def test_doctor_project_fresh(
     make_project: MakeProject,
 ) -> None:
     _engines_ok(monkeypatch)
-    assert run_doctor(make_project("core_legacy")) == 0
+    # core_duckdb, not core_legacy: a DuckDB project needs the duckdb_semantic_views package.
+    assert run_doctor(make_project("core_duckdb")) == 0
     out = capsys.readouterr().out
     assert "OK  artifacts: fresh (dbt Core 1.12.6)" in out
     assert "WARN" not in out
@@ -671,3 +672,28 @@ def test_doctor_reports_the_metric_view_materialization(
     )
     assert run_doctor(project_dir) == 0
     assert "OK  dbt-databricks metric views: installed" in capsys.readouterr().out
+
+
+# --- duckdb_semantic_views (Phase 7) ----------------------------------------------------
+
+
+def test_doctor_reports_a_missing_duckdb_package(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    make_project: MakeProject,
+) -> None:
+    _engines_ok(monkeypatch)
+    assert run_doctor(make_project("core_export")) == 0
+    out = capsys.readouterr().out
+    assert "WARN duckdb_semantic_views: not installed" in out
+    assert "s-layer/dbt-duckdb-semantic-views to packages.yml" in out
+
+
+def test_doctor_reports_the_duckdb_package(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    make_project: MakeProject,
+) -> None:
+    _engines_ok(monkeypatch)
+    assert run_doctor(make_project("core_duckdb")) == 0
+    assert "OK  duckdb_semantic_views: installed" in capsys.readouterr().out

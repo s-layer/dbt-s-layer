@@ -1,0 +1,1167 @@
+{
+  "metrics": [
+    {
+      "config": {
+        "meta": {}
+      },
+      "datatype": null,
+      "description": "",
+      "filter": null,
+      "label": "items_sold",
+      "metadata": null,
+      "name": "items_sold",
+      "time_granularity": null,
+      "type": "simple",
+      "type_params": {
+        "conversion_type_params": null,
+        "cumulative_type_params": null,
+        "denominator": null,
+        "expr": null,
+        "fill_nulls_with": null,
+        "grain_to_date": null,
+        "input_measures": [
+          {
+            "alias": null,
+            "fill_nulls_with": null,
+            "filter": null,
+            "join_to_timespine": false,
+            "name": "quantity_total"
+          }
+        ],
+        "is_private": null,
+        "join_to_timespine": false,
+        "measure": {
+          "alias": null,
+          "fill_nulls_with": null,
+          "filter": null,
+          "join_to_timespine": false,
+          "name": "quantity_total"
+        },
+        "metric_aggregation_params": null,
+        "metrics": [],
+        "numerator": null,
+        "window": null
+      }
+    },
+    {
+      "config": {
+        "meta": {}
+      },
+      "datatype": null,
+      "description": "",
+      "filter": null,
+      "label": "paid_revenue",
+      "metadata": null,
+      "name": "paid_revenue",
+      "time_granularity": null,
+      "type": "simple",
+      "type_params": {
+        "conversion_type_params": null,
+        "cumulative_type_params": null,
+        "denominator": null,
+        "expr": null,
+        "fill_nulls_with": null,
+        "grain_to_date": null,
+        "input_measures": [
+          {
+            "alias": null,
+            "fill_nulls_with": null,
+            "filter": null,
+            "join_to_timespine": false,
+            "name": "paid_total"
+          }
+        ],
+        "is_private": null,
+        "join_to_timespine": false,
+        "measure": {
+          "alias": null,
+          "fill_nulls_with": null,
+          "filter": null,
+          "join_to_timespine": false,
+          "name": "paid_total"
+        },
+        "metric_aggregation_params": null,
+        "metrics": [],
+        "numerator": null,
+        "window": null
+      }
+    },
+    {
+      "config": {
+        "meta": {
+          "s_layer": {
+            "display": {
+              "decimals": {
+                "max": 0
+              }
+            },
+            "synonyms": [
+              "sales",
+              "turnover"
+            ],
+            "value": {
+              "currency": "USD",
+              "kind": "currency"
+            }
+          }
+        }
+      },
+      "datatype": null,
+      "description": "",
+      "filter": null,
+      "label": "Revenue",
+      "metadata": null,
+      "name": "revenue",
+      "time_granularity": null,
+      "type": "simple",
+      "type_params": {
+        "conversion_type_params": null,
+        "cumulative_type_params": null,
+        "denominator": null,
+        "expr": null,
+        "fill_nulls_with": null,
+        "grain_to_date": null,
+        "input_measures": [
+          {
+            "alias": null,
+            "fill_nulls_with": null,
+            "filter": null,
+            "join_to_timespine": false,
+            "name": "order_total"
+          }
+        ],
+        "is_private": null,
+        "join_to_timespine": false,
+        "measure": {
+          "alias": null,
+          "fill_nulls_with": null,
+          "filter": null,
+          "join_to_timespine": false,
+          "name": "order_total"
+        },
+        "metric_aggregation_params": null,
+        "metrics": [],
+        "numerator": null,
+        "window": null
+      }
+    },
+    {
+      "config": {
+        "meta": {}
+      },
+      "datatype": null,
+      "description": "",
+      "filter": null,
+      "label": "revenue_cumulative",
+      "metadata": null,
+      "name": "revenue_cumulative",
+      "time_granularity": null,
+      "type": "cumulative",
+      "type_params": {
+        "conversion_type_params": null,
+        "cumulative_type_params": {
+          "grain_to_date": null,
+          "metric": null,
+          "period_agg": "first",
+          "window": null
+        },
+        "denominator": null,
+        "expr": null,
+        "fill_nulls_with": null,
+        "grain_to_date": null,
+        "input_measures": [
+          {
+            "alias": null,
+            "fill_nulls_with": null,
+            "filter": null,
+            "join_to_timespine": false,
+            "name": "order_total"
+          }
+        ],
+        "is_private": null,
+        "join_to_timespine": false,
+        "measure": {
+          "alias": null,
+          "fill_nulls_with": null,
+          "filter": null,
+          "join_to_timespine": false,
+          "name": "order_total"
+        },
+        "metric_aggregation_params": null,
+        "metrics": [],
+        "numerator": null,
+        "window": null
+      }
+    },
+    {
+      "config": {
+        "meta": {}
+      },
+      "datatype": null,
+      "description": "Distinct orders.",
+      "filter": null,
+      "label": "Orders",
+      "metadata": null,
+      "name": "order_count",
+      "time_granularity": null,
+      "type": "simple",
+      "type_params": {
+        "conversion_type_params": null,
+        "cumulative_type_params": null,
+        "denominator": null,
+        "expr": null,
+        "fill_nulls_with": null,
+        "grain_to_date": null,
+        "input_measures": [
+          {
+            "alias": null,
+            "fill_nulls_with": null,
+            "filter": null,
+            "join_to_timespine": false,
+            "name": "distinct_orders"
+          }
+        ],
+        "is_private": null,
+        "join_to_timespine": false,
+        "measure": {
+          "alias": null,
+          "fill_nulls_with": null,
+          "filter": null,
+          "join_to_timespine": false,
+          "name": "distinct_orders"
+        },
+        "metric_aggregation_params": null,
+        "metrics": [],
+        "numerator": null,
+        "window": null
+      }
+    },
+    {
+      "config": {
+        "meta": {}
+      },
+      "datatype": null,
+      "description": "",
+      "filter": null,
+      "label": "Revenue p90",
+      "metadata": null,
+      "name": "revenue_p90",
+      "time_granularity": null,
+      "type": "simple",
+      "type_params": {
+        "conversion_type_params": null,
+        "cumulative_type_params": null,
+        "denominator": null,
+        "expr": null,
+        "fill_nulls_with": null,
+        "grain_to_date": null,
+        "input_measures": [
+          {
+            "alias": null,
+            "fill_nulls_with": null,
+            "filter": null,
+            "join_to_timespine": false,
+            "name": "amount_p90"
+          }
+        ],
+        "is_private": null,
+        "join_to_timespine": false,
+        "measure": {
+          "alias": null,
+          "fill_nulls_with": null,
+          "filter": null,
+          "join_to_timespine": false,
+          "name": "amount_p90"
+        },
+        "metric_aggregation_params": null,
+        "metrics": [],
+        "numerator": null,
+        "window": null
+      }
+    },
+    {
+      "config": {
+        "meta": {}
+      },
+      "datatype": null,
+      "description": "",
+      "filter": null,
+      "label": "revenue_p50_approx",
+      "metadata": null,
+      "name": "revenue_p50_approx",
+      "time_granularity": null,
+      "type": "simple",
+      "type_params": {
+        "conversion_type_params": null,
+        "cumulative_type_params": null,
+        "denominator": null,
+        "expr": null,
+        "fill_nulls_with": null,
+        "grain_to_date": null,
+        "input_measures": [
+          {
+            "alias": null,
+            "fill_nulls_with": null,
+            "filter": null,
+            "join_to_timespine": false,
+            "name": "amount_p50_approx"
+          }
+        ],
+        "is_private": null,
+        "join_to_timespine": false,
+        "measure": {
+          "alias": null,
+          "fill_nulls_with": null,
+          "filter": null,
+          "join_to_timespine": false,
+          "name": "amount_p50_approx"
+        },
+        "metric_aggregation_params": null,
+        "metrics": [],
+        "numerator": null,
+        "window": null
+      }
+    },
+    {
+      "config": {
+        "meta": {}
+      },
+      "datatype": null,
+      "description": "",
+      "filter": null,
+      "label": "Latest revenue",
+      "metadata": null,
+      "name": "latest_revenue",
+      "time_granularity": null,
+      "type": "simple",
+      "type_params": {
+        "conversion_type_params": null,
+        "cumulative_type_params": null,
+        "denominator": null,
+        "expr": null,
+        "fill_nulls_with": null,
+        "grain_to_date": null,
+        "input_measures": [
+          {
+            "alias": null,
+            "fill_nulls_with": null,
+            "filter": null,
+            "join_to_timespine": false,
+            "name": "latest_amount"
+          }
+        ],
+        "is_private": null,
+        "join_to_timespine": false,
+        "measure": {
+          "alias": null,
+          "fill_nulls_with": null,
+          "filter": null,
+          "join_to_timespine": false,
+          "name": "latest_amount"
+        },
+        "metric_aggregation_params": null,
+        "metrics": [],
+        "numerator": null,
+        "window": null
+      }
+    },
+    {
+      "config": {
+        "meta": {
+          "s_layer": {
+            "value": {
+              "currency": "USD",
+              "kind": "currency"
+            }
+          }
+        }
+      },
+      "datatype": null,
+      "description": "",
+      "filter": null,
+      "label": "AOV",
+      "metadata": null,
+      "name": "average_order_value",
+      "time_granularity": null,
+      "type": "ratio",
+      "type_params": {
+        "conversion_type_params": null,
+        "cumulative_type_params": null,
+        "denominator": {
+          "alias": null,
+          "filter": null,
+          "name": "order_count",
+          "offset_to_grain": null,
+          "offset_window": null
+        },
+        "expr": null,
+        "fill_nulls_with": null,
+        "grain_to_date": null,
+        "input_measures": [
+          {
+            "alias": null,
+            "fill_nulls_with": null,
+            "filter": null,
+            "join_to_timespine": false,
+            "name": "order_total"
+          },
+          {
+            "alias": null,
+            "fill_nulls_with": null,
+            "filter": null,
+            "join_to_timespine": false,
+            "name": "distinct_orders"
+          }
+        ],
+        "is_private": null,
+        "join_to_timespine": false,
+        "measure": null,
+        "metric_aggregation_params": null,
+        "metrics": [],
+        "numerator": {
+          "alias": null,
+          "filter": null,
+          "name": "revenue",
+          "offset_to_grain": null,
+          "offset_window": null
+        },
+        "window": null
+      }
+    },
+    {
+      "config": {
+        "meta": {}
+      },
+      "datatype": null,
+      "description": "",
+      "filter": null,
+      "label": "Revenue x2",
+      "metadata": null,
+      "name": "revenue_doubled",
+      "time_granularity": null,
+      "type": "derived",
+      "type_params": {
+        "conversion_type_params": null,
+        "cumulative_type_params": null,
+        "denominator": null,
+        "expr": "rev * 2",
+        "fill_nulls_with": null,
+        "grain_to_date": null,
+        "input_measures": [
+          {
+            "alias": null,
+            "fill_nulls_with": null,
+            "filter": null,
+            "join_to_timespine": false,
+            "name": "order_total"
+          }
+        ],
+        "is_private": null,
+        "join_to_timespine": false,
+        "measure": null,
+        "metric_aggregation_params": null,
+        "metrics": [
+          {
+            "alias": "rev",
+            "filter": null,
+            "name": "revenue",
+            "offset_to_grain": null,
+            "offset_window": null
+          }
+        ],
+        "numerator": null,
+        "window": null
+      }
+    },
+    {
+      "config": {
+        "meta": {}
+      },
+      "datatype": null,
+      "description": "",
+      "filter": null,
+      "label": "Revenue per item",
+      "metadata": null,
+      "name": "revenue_per_item",
+      "time_granularity": null,
+      "type": "derived",
+      "type_params": {
+        "conversion_type_params": null,
+        "cumulative_type_params": null,
+        "denominator": null,
+        "expr": "revenue / items_sold",
+        "fill_nulls_with": null,
+        "grain_to_date": null,
+        "input_measures": [
+          {
+            "alias": null,
+            "fill_nulls_with": null,
+            "filter": null,
+            "join_to_timespine": false,
+            "name": "order_total"
+          },
+          {
+            "alias": null,
+            "fill_nulls_with": null,
+            "filter": null,
+            "join_to_timespine": false,
+            "name": "quantity_total"
+          }
+        ],
+        "is_private": null,
+        "join_to_timespine": false,
+        "measure": null,
+        "metric_aggregation_params": null,
+        "metrics": [
+          {
+            "alias": null,
+            "filter": null,
+            "name": "revenue",
+            "offset_to_grain": null,
+            "offset_window": null
+          },
+          {
+            "alias": null,
+            "filter": null,
+            "name": "items_sold",
+            "offset_to_grain": null,
+            "offset_window": null
+          }
+        ],
+        "numerator": null,
+        "window": null
+      }
+    }
+  ],
+  "project_configuration": {
+    "dsi_package_version": {
+      "major_version": "0",
+      "minor_version": "213",
+      "patch_version": "0"
+    },
+    "metadata": null,
+    "time_spine_table_configurations": [],
+    "time_spines": [
+      {
+        "custom_granularities": [],
+        "node_relation": {
+          "alias": "metricflow_time_spine",
+          "database": "fx",
+          "relation_name": "\"fx\".\"marts\".\"metricflow_time_spine\"",
+          "schema_name": "marts"
+        },
+        "primary_column": {
+          "name": "date_day",
+          "time_granularity": "day"
+        }
+      }
+    ]
+  },
+  "saved_queries": [
+    {
+      "description": null,
+      "exports": [
+        {
+          "config": {
+            "alias": "exp_revenue_by_day",
+            "export_as": "table",
+            "schema_name": "marts"
+          },
+          "name": "exp_revenue_by_day"
+        },
+        {
+          "config": {
+            "alias": "revenue_daily",
+            "export_as": "view",
+            "schema_name": "reporting"
+          },
+          "name": "exp_revenue_by_day_view"
+        }
+      ],
+      "label": null,
+      "metadata": null,
+      "name": "revenue_by_day",
+      "query_params": {
+        "group_by": [
+          "TimeDimension('order__ordered_at', 'day')"
+        ],
+        "limit": null,
+        "metrics": [
+          "revenue"
+        ],
+        "order_by": [],
+        "where": null
+      },
+      "tags": []
+    },
+    {
+      "description": null,
+      "exports": [
+        {
+          "config": {
+            "alias": "exp_region_country",
+            "export_as": "table",
+            "schema_name": "marts"
+          },
+          "name": "exp_region_country"
+        }
+      ],
+      "label": null,
+      "metadata": null,
+      "name": "revenue_by_region_country",
+      "query_params": {
+        "group_by": [
+          "Dimension('store__region')",
+          "Dimension('customer__country')"
+        ],
+        "limit": null,
+        "metrics": [
+          "revenue"
+        ],
+        "order_by": [],
+        "where": {
+          "where_filters": [
+            {
+              "where_sql_template": "{{ Dimension('order__status') }} = 'paid'"
+            }
+          ]
+        }
+      },
+      "tags": []
+    },
+    {
+      "description": null,
+      "exports": [
+        {
+          "config": {
+            "alias": "exp_items_by_country",
+            "export_as": "view",
+            "schema_name": "sq_schema"
+          },
+          "name": "exp_items_by_country"
+        }
+      ],
+      "label": null,
+      "metadata": null,
+      "name": "items_by_country",
+      "query_params": {
+        "group_by": [
+          "Dimension('customer__country', entity_path=['order'])"
+        ],
+        "limit": null,
+        "metrics": [
+          "items_sold"
+        ],
+        "order_by": [],
+        "where": null
+      },
+      "tags": []
+    },
+    {
+      "description": null,
+      "exports": [
+        {
+          "config": {
+            "alias": "exp_cumulative",
+            "export_as": "table",
+            "schema_name": "marts"
+          },
+          "name": "exp_cumulative"
+        }
+      ],
+      "label": null,
+      "metadata": null,
+      "name": "cumulative_revenue",
+      "query_params": {
+        "group_by": [
+          "TimeDimension('metric_time', 'day')"
+        ],
+        "limit": null,
+        "metrics": [
+          "revenue_cumulative"
+        ],
+        "order_by": [],
+        "where": null
+      },
+      "tags": []
+    }
+  ],
+  "semantic_models": [
+    {
+      "config": {
+        "meta": {}
+      },
+      "defaults": {
+        "agg_time_dimension": "ordered_at"
+      },
+      "description": null,
+      "dimensions": [
+        {
+          "config": {
+            "meta": {}
+          },
+          "datatype": null,
+          "description": null,
+          "expr": null,
+          "is_partition": false,
+          "label": null,
+          "metadata": null,
+          "name": "ordered_at",
+          "type": "time",
+          "type_params": {
+            "time_granularity": "day",
+            "validity_params": null
+          }
+        }
+      ],
+      "entities": [
+        {
+          "config": {
+            "meta": {}
+          },
+          "description": null,
+          "expr": "order_item_id",
+          "label": null,
+          "metadata": null,
+          "name": "order_item",
+          "role": null,
+          "type": "primary"
+        },
+        {
+          "config": {
+            "meta": {}
+          },
+          "description": null,
+          "expr": "order_id",
+          "label": null,
+          "metadata": null,
+          "name": "order",
+          "role": null,
+          "type": "foreign"
+        }
+      ],
+      "label": null,
+      "measures": [
+        {
+          "agg": "sum",
+          "agg_params": null,
+          "agg_time_dimension": null,
+          "config": {
+            "meta": {}
+          },
+          "create_metric": false,
+          "description": null,
+          "expr": "quantity",
+          "label": null,
+          "metadata": null,
+          "name": "quantity_total",
+          "non_additive_dimension": null
+        }
+      ],
+      "metadata": null,
+      "name": "order_items",
+      "node_relation": {
+        "alias": "Order_Items",
+        "database": "fx",
+        "relation_name": "\"fx\".\"marts\".\"Order_Items\"",
+        "schema_name": "marts"
+      },
+      "primary_entity": null
+    },
+    {
+      "config": {
+        "meta": {}
+      },
+      "defaults": {
+        "agg_time_dimension": "signed_up_at"
+      },
+      "description": null,
+      "dimensions": [
+        {
+          "config": {
+            "meta": {}
+          },
+          "datatype": null,
+          "description": null,
+          "expr": null,
+          "is_partition": false,
+          "label": null,
+          "metadata": null,
+          "name": "country",
+          "type": "categorical",
+          "type_params": null
+        },
+        {
+          "config": {
+            "meta": {}
+          },
+          "datatype": null,
+          "description": null,
+          "expr": null,
+          "is_partition": false,
+          "label": null,
+          "metadata": null,
+          "name": "signed_up_at",
+          "type": "time",
+          "type_params": {
+            "time_granularity": "day",
+            "validity_params": null
+          }
+        }
+      ],
+      "entities": [
+        {
+          "config": {
+            "meta": {}
+          },
+          "description": null,
+          "expr": "customer_id",
+          "label": null,
+          "metadata": null,
+          "name": "customer",
+          "role": null,
+          "type": "primary"
+        }
+      ],
+      "label": null,
+      "measures": [
+        {
+          "agg": "count_distinct",
+          "agg_params": null,
+          "agg_time_dimension": null,
+          "config": {
+            "meta": {}
+          },
+          "create_metric": false,
+          "description": null,
+          "expr": "customer_id",
+          "label": null,
+          "metadata": null,
+          "name": "customer_count",
+          "non_additive_dimension": null
+        }
+      ],
+      "metadata": null,
+      "name": "customers",
+      "node_relation": {
+        "alias": "customers_v1",
+        "database": "fx",
+        "relation_name": "\"fx\".\"marts\".\"customers_v1\"",
+        "schema_name": "marts"
+      },
+      "primary_entity": null
+    },
+    {
+      "config": {
+        "meta": {}
+      },
+      "defaults": {
+        "agg_time_dimension": "ordered_at"
+      },
+      "description": "One row per order. It's the 'fact' table.",
+      "dimensions": [
+        {
+          "config": {
+            "meta": {
+              "s_layer": {
+                "synonyms": [
+                  "order status"
+                ],
+                "value": {
+                  "kind": "category"
+                }
+              }
+            }
+          },
+          "datatype": null,
+          "description": null,
+          "expr": null,
+          "is_partition": false,
+          "label": null,
+          "metadata": null,
+          "name": "status",
+          "type": "categorical",
+          "type_params": null
+        },
+        {
+          "config": {
+            "meta": {}
+          },
+          "datatype": null,
+          "description": null,
+          "expr": "date_trunc('month', ordered_at)",
+          "is_partition": false,
+          "label": null,
+          "metadata": null,
+          "name": "order_month",
+          "type": "categorical",
+          "type_params": null
+        },
+        {
+          "config": {
+            "meta": {
+              "s_layer": {
+                "value": {
+                  "kind": "date"
+                }
+              }
+            }
+          },
+          "datatype": null,
+          "description": null,
+          "expr": null,
+          "is_partition": false,
+          "label": null,
+          "metadata": null,
+          "name": "ordered_at",
+          "type": "time",
+          "type_params": {
+            "time_granularity": "day",
+            "validity_params": null
+          }
+        }
+      ],
+      "entities": [
+        {
+          "config": {
+            "meta": {
+              "s_layer": {
+                "value": {
+                  "kind": "identifier"
+                }
+              }
+            }
+          },
+          "description": null,
+          "expr": "order_id",
+          "label": null,
+          "metadata": null,
+          "name": "order",
+          "role": null,
+          "type": "primary"
+        },
+        {
+          "config": {
+            "meta": {}
+          },
+          "description": null,
+          "expr": "customer_id",
+          "label": null,
+          "metadata": null,
+          "name": "customer",
+          "role": null,
+          "type": "foreign"
+        },
+        {
+          "config": {
+            "meta": {}
+          },
+          "description": null,
+          "expr": "store_id",
+          "label": null,
+          "metadata": null,
+          "name": "store",
+          "role": null,
+          "type": "foreign"
+        }
+      ],
+      "label": null,
+      "measures": [
+        {
+          "agg": "sum",
+          "agg_params": null,
+          "agg_time_dimension": null,
+          "config": {
+            "meta": {}
+          },
+          "create_metric": false,
+          "description": null,
+          "expr": "CASE WHEN status = 'paid' THEN amount ELSE 0 END",
+          "label": null,
+          "metadata": null,
+          "name": "paid_total",
+          "non_additive_dimension": null
+        },
+        {
+          "agg": "sum",
+          "agg_params": null,
+          "agg_time_dimension": null,
+          "config": {
+            "meta": {}
+          },
+          "create_metric": false,
+          "description": null,
+          "expr": "amount",
+          "label": null,
+          "metadata": null,
+          "name": "order_total",
+          "non_additive_dimension": null
+        },
+        {
+          "agg": "count_distinct",
+          "agg_params": null,
+          "agg_time_dimension": null,
+          "config": {
+            "meta": {}
+          },
+          "create_metric": false,
+          "description": null,
+          "expr": "order_id",
+          "label": null,
+          "metadata": null,
+          "name": "distinct_orders",
+          "non_additive_dimension": null
+        },
+        {
+          "agg": "percentile",
+          "agg_params": {
+            "percentile": 0.9,
+            "use_approximate_percentile": false,
+            "use_discrete_percentile": true
+          },
+          "agg_time_dimension": null,
+          "config": {
+            "meta": {}
+          },
+          "create_metric": false,
+          "description": null,
+          "expr": "amount",
+          "label": null,
+          "metadata": null,
+          "name": "amount_p90",
+          "non_additive_dimension": null
+        },
+        {
+          "agg": "percentile",
+          "agg_params": {
+            "percentile": 0.5,
+            "use_approximate_percentile": true,
+            "use_discrete_percentile": true
+          },
+          "agg_time_dimension": null,
+          "config": {
+            "meta": {}
+          },
+          "create_metric": false,
+          "description": null,
+          "expr": "amount",
+          "label": null,
+          "metadata": null,
+          "name": "amount_p50_approx",
+          "non_additive_dimension": null
+        },
+        {
+          "agg": "sum",
+          "agg_params": null,
+          "agg_time_dimension": null,
+          "config": {
+            "meta": {}
+          },
+          "create_metric": false,
+          "description": null,
+          "expr": "amount",
+          "label": null,
+          "metadata": null,
+          "name": "latest_amount",
+          "non_additive_dimension": {
+            "name": "ordered_at",
+            "window_choice": "max",
+            "window_groupings": []
+          }
+        }
+      ],
+      "metadata": null,
+      "name": "orders",
+      "node_relation": {
+        "alias": "orders",
+        "database": "fx",
+        "relation_name": "\"fx\".\"marts\".\"orders\"",
+        "schema_name": "marts"
+      },
+      "primary_entity": null
+    },
+    {
+      "config": {
+        "meta": {}
+      },
+      "defaults": {
+        "agg_time_dimension": "opened_at"
+      },
+      "description": null,
+      "dimensions": [
+        {
+          "config": {
+            "meta": {}
+          },
+          "datatype": null,
+          "description": null,
+          "expr": null,
+          "is_partition": false,
+          "label": null,
+          "metadata": null,
+          "name": "region",
+          "type": "categorical",
+          "type_params": null
+        },
+        {
+          "config": {
+            "meta": {}
+          },
+          "datatype": null,
+          "description": null,
+          "expr": null,
+          "is_partition": false,
+          "label": null,
+          "metadata": null,
+          "name": "opened_at",
+          "type": "time",
+          "type_params": {
+            "time_granularity": "day",
+            "validity_params": null
+          }
+        }
+      ],
+      "entities": [
+        {
+          "config": {
+            "meta": {}
+          },
+          "description": null,
+          "expr": "store_id",
+          "label": null,
+          "metadata": null,
+          "name": "store",
+          "role": null,
+          "type": "primary"
+        }
+      ],
+      "label": null,
+      "measures": [
+        {
+          "agg": "count",
+          "agg_params": null,
+          "agg_time_dimension": null,
+          "config": {
+            "meta": {}
+          },
+          "create_metric": false,
+          "description": null,
+          "expr": "store_id",
+          "label": null,
+          "metadata": null,
+          "name": "store_count",
+          "non_additive_dimension": null
+        }
+      ],
+      "metadata": null,
+      "name": "stores",
+      "node_relation": {
+        "alias": "stores",
+        "database": "fx",
+        "relation_name": "\"fx\".\"marts\".\"stores\"",
+        "schema_name": "marts"
+      },
+      "primary_entity": null
+    }
+  ]
+}

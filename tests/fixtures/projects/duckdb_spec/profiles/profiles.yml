@@ -1,0 +1,10 @@
+# `dbt parse` and `dbt compile` never open the database; `dbt build` (the DuckDB
+# compile test) writes fx.duckdb next to dbt_project.yml.
+fx:
+  target: duckdb
+  outputs:
+    duckdb:
+      type: duckdb
+      path: fx.duckdb
+      schema: marts
+      threads: 4
