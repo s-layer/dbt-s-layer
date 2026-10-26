@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from dataclasses import FrozenInstanceError
 from pathlib import Path
+from typing import Any
 
 import pytest
 from metricflow_semantics.model.semantic_manifest_lookup import SemanticManifestLookup
 
+from dbt_s_layer.artifacts import ManifestColumn
 from dbt_s_layer.errors import ArtifactInvalidError, ArtifactNotFoundError
 from dbt_s_layer.project import load_project, producer_label
 from tests.conftest import ARTIFACT_SETS, MakeProject
@@ -96,6 +99,86 @@ def test_dimension_meta_is_the_same_from_either_engine(make_project: MakeProject
         }
 
     assert all_meta("fusion_new") == all_meta("core_new")
+
+
+def _edit_json(path: Path, edit: Callable[[dict[str, Any]], None]) -> None:
+    data: dict[str, Any] = json.loads(path.read_text())
+    edit(data)
+    path.write_text(json.dumps(data))
+
+
+def test_core_dimension_meta_is_kept_as_core_wrote_it(make_project: MakeProject) -> None:
+    # dbt Core already merged the column meta, legacy-spec dimensions on the same
+    # model included or not, so its semantic_manifest.json is not merged again.
+    project_dir = make_project("core_new")
+
+    def add_column_meta(manifest: dict[str, Any]) -> None:
+        column = manifest["nodes"]["model.fx.orders"]["columns"]["ordered_at"]
+        column["config"]["meta"]["only_in_manifest"] = True
+
+    _edit_json(project_dir / "target" / "manifest.json", add_column_meta)
+    assert _dimension_meta(project_dir, "orders", "ordered_at") == ORDERED_AT_META
+
+
+def test_fusion_merges_column_meta_into_a_renamed_dimension(make_project: MakeProject) -> None:
+    project_dir = make_project("fusion_new")
+
+    def add_dimension(semantic: dict[str, Any]) -> None:
+        orders = next(sm for sm in semantic["semantic_models"] if sm["name"] == "orders")
+        template = next(d for d in orders["dimensions"] if d["name"] == "ordered_at")
+        orders["dimensions"].append(
+            {
+                **template,
+                "name": "order_status",
+                "type": "categorical",
+                "expr": "status",
+                "type_params": None,
+                "config": None,
+            }
+        )
+
+    def add_column(manifest: dict[str, Any]) -> None:
+        manifest["nodes"]["model.fx.orders"]["columns"]["status"] = {
+            "name": "status",
+            "config": {"meta": {"from": "column"}},
+            "dimension": {"name": "order_status", "type": "categorical"},
+        }
+
+    _edit_json(project_dir / "target" / "semantic_manifest.json", add_dimension)
+    _edit_json(project_dir / "target" / "manifest.json", add_column)
+    assert _dimension_meta(project_dir, "orders", "order_status") == {"from": "column"}
+
+
+@pytest.mark.parametrize("key", ["config", "meta"])
+def test_null_column_config_or_meta_loads(key: str, make_project: MakeProject) -> None:
+    project_dir = make_project("fusion_new")
+
+    def null_out(manifest: dict[str, Any]) -> None:
+        column = manifest["nodes"]["model.fx.orders"]["columns"]["ordered_at"]
+        if key == "config":
+            column["config"] = None
+        else:
+            column["config"]["meta"] = None
+
+    _edit_json(project_dir / "target" / "manifest.json", null_out)
+    assert _dimension_meta(project_dir, "orders", "ordered_at") == {
+        "source": "dimension",
+        "dimension_only": True,
+    }
+
+
+@pytest.mark.parametrize(
+    ("dimension", "expected"),
+    [
+        ("categorical", "status"),
+        ({"type": "categorical"}, "status"),
+        ({"type": "categorical", "name": "order_status"}, "order_status"),
+        (None, None),
+    ],
+)
+def test_manifest_column_dimension_name(dimension: object, expected: str | None) -> None:
+    column = ManifestColumn.model_validate({"name": "status", "dimension": dimension})
+    assert column.dimension_name == expected
 
 
 def test_project_is_frozen(make_project: MakeProject) -> None:
