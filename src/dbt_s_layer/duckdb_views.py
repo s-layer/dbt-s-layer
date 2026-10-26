@@ -202,9 +202,17 @@ def _synonyms(block: SLayerBlock | None) -> str:
 
 def _lambda_or_subquery(words: list[str]) -> bool:
     """Whether an expr's significant tokens hold a lambda, a subquery or a list comprehension."""
+    opened: list[str] = []
     for i, word in enumerate(words):
-        # `[x * 2 FOR x IN xs]` is a list comprehension; `(FROM t)` a FROM-first subquery.
-        if word in ("LAMBDA", "SELECT", "FOR") or (word == "FROM" and words[i - 1 : i] == ["("]):
+        if word in ("(", "["):
+            opened.append(word)
+        elif word in (")", "]") and opened:
+            opened.pop()
+        # `[x * 2 FOR x IN xs]` is a list comprehension (`substring(s FROM 1 FOR 3)` is
+        # not); `(FROM t)` is a FROM-first subquery.
+        if word in ("LAMBDA", "SELECT") or (word == "FOR" and opened[-1:] == ["["]):
+            return True
+        if word == "FROM" and words[i - 1 : i] == ["("]:
             return True
         # `x -> x + 1` is a lambda; `j -> 'key'`, `j ->> '$.key'` and `j -> 0` read JSON.
         if word == "-" and words[i + 1 : i + 2] == [">"]:

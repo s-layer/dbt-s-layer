@@ -302,6 +302,11 @@ def test_synonyms_but_no_tags() -> None:
         ("ordered_at::timestamp with time zone", "orders.ordered_at::timestamp with time zone"),
         ("time + 1", "orders.time + 1"),
         ("zone || tz", "orders.zone || orders.tz"),
+        ("substring(status FROM 1 FOR 3)", "substring(orders.status FROM 1 FOR 3)"),
+        (
+            "overlay(status PLACING 'x' FROM 1 FOR 2)",
+            "overlay(orders.status PLACING 'x' FROM 1 FOR 2)",
+        ),
         (
             "ordered_at::timestamp without time zone",
             "orders.ordered_at::timestamp without time zone",
