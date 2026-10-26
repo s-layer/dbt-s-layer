@@ -56,6 +56,9 @@ class DeclaredSemanticModel:
     legacy: bool
     # Attached to a versioned model (the entry has `versions:`).
     versioned: bool
+    # Lowercased names of the metrics declared on the same `models:` entry
+    # (new spec), which go wherever the semantic model goes.
+    metrics: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -126,9 +129,14 @@ def _declarations(data: dict[str, object], file: Path) -> tuple[bool, list[Decla
         else:
             enabled = config is not False and config is not None
         if enabled and isinstance(name, str):
+            metrics = (m.get("name") for m in _mappings(entry.get("metrics")))
             declared.append(
                 DeclaredSemanticModel(
-                    name.lower(), file, legacy=False, versioned="versions" in entry
+                    name.lower(),
+                    file,
+                    legacy=False,
+                    versioned="versions" in entry,
+                    metrics=tuple(m.lower() for m in metrics if isinstance(m, str)),
                 )
             )
 

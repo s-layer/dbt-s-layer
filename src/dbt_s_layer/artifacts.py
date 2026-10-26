@@ -190,6 +190,35 @@ class NodeConfig(_ManifestModel):
     materialized: str | None = None
 
 
+class ColumnConfig(_ManifestModel):
+    """A column's `config`."""
+
+    meta: dict[str, object] = {}
+
+
+class ManifestColumn(_ManifestModel):
+    """A `columns[*]` entry of a model node."""
+
+    name: str
+    config: ColumnConfig = ColumnConfig()
+    # The new-spec `dimension:` declared on the column, if any.
+    dimension: dict[str, object] | None = None
+
+    @field_validator("dimension", mode="before")
+    @classmethod
+    def _dimension_mapping(cls, value: object) -> object:
+        # `dimension: categorical` is shorthand for `dimension: {type: categorical}`.
+        return {"type": value} if isinstance(value, str) else value
+
+    @property
+    def dimension_name(self) -> str | None:
+        """The name of the dimension declared on this column, if any."""
+        if self.dimension is None:
+            return None
+        name = self.dimension.get("name")
+        return name if isinstance(name, str) else self.name
+
+
 class ModelNode(_ManifestModel):
     """A `nodes[*]` entry a semantic model can read: a model, seed or snapshot."""
 
@@ -208,6 +237,7 @@ class ModelNode(_ManifestModel):
     # Relative to the package's root.
     original_file_path: str = ""
     config: NodeConfig = NodeConfig()
+    columns: dict[str, ManifestColumn] = {}
 
 
 class DbtSemanticModel(_ManifestModel):

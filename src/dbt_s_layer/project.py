@@ -6,6 +6,10 @@ import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from metricflow_semantic_interfaces.implementations.element_config import (
+    PydanticSemanticLayerElementConfig,
+)
+
 from dbt_s_layer.artifacts import (
     DBT_MANIFEST,
     SEMANTIC_MANIFEST,
@@ -75,9 +79,40 @@ def load_project(project_dir: Path) -> SemanticProject:
             f"{dbt_manifest.metadata.project_name!r}, but {project_dir} is project "
             f"{project_name!r}. Re-run `dbt parse` in {project_dir}."
         )
+    _merge_column_meta(semantic_manifest, dbt_manifest)
     return SemanticProject(
         project_dir=project_dir,
         semantic_manifest=semantic_manifest,
         dbt_manifest=dbt_manifest,
         producer=producer_label(dbt_manifest.metadata.dbt_version),
     )
+
+
+def _merge_column_meta(
+    semantic_manifest: PydanticSemanticManifest, dbt_manifest: DbtManifest
+) -> None:
+    """
+    Give every dimension the `config.meta` dbt Core would, whichever engine parsed.
+
+    dbt Core merges a column's `config.meta` into the new-spec dimension declared on
+    it, the dimension's own keys winning. Fusion writes only the dimension's own
+    meta, or `config: null`. manifest.json keeps the column meta on both engines, so
+    the merge is redone from it here. Dimensions without a config get an empty one.
+    """
+    nodes_by_semantic_model = {
+        sm.name.lower(): sm.depends_on.nodes for sm in dbt_manifest.semantic_models.values()
+    }
+    for semantic_model in semantic_manifest.semantic_models:
+        column_meta: dict[str, dict[str, object]] = {}
+        for node_id in nodes_by_semantic_model.get(semantic_model.name, ()):
+            node = dbt_manifest.nodes.get(node_id)
+            if node is None:
+                continue
+            for column in node.columns.values():
+                name = column.dimension_name
+                if name is not None:
+                    column_meta[name.lower()] = column.config.meta
+        for dimension in semantic_model.dimensions:
+            own = {} if dimension.config is None else dimension.config.meta
+            merged = {**column_meta.get(dimension.name, {}), **own}
+            dimension.config = PydanticSemanticLayerElementConfig(meta=merged)

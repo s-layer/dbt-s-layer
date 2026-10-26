@@ -21,11 +21,15 @@ All notable changes to this project are documented here. The format follows
   semantic YAML.
 - `dbt-s-layer --version`.
 - Both dbt Core (>= 1.7) and dbt Fusion parse artifacts are supported, and produce the same
-  files.
+  files. Dimension `meta` reads the same from either engine: a column's `config.meta` is merged
+  into its dimension's, as dbt Core does, although Fusion leaves it out of
+  `semantic_manifest.json`.
 
 ### Known limitations
 
 - DuckDB semantic views are not generated yet; DuckDB projects get the exports only.
+- dbt Core drops a new-spec semantic model on a versioned model, and the metrics declared with
+  it. dbt-s-layer warns, naming both, and suggests parsing with Fusion.
 - Cumulative and conversion metrics, metric filters, and some percentile kinds are left out of
   semantic and metric views (see the README).
 
