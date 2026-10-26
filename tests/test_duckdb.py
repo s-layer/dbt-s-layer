@@ -289,6 +289,23 @@ def test_synonyms_but_no_tags() -> None:
         ("round(amount, digits := 2)", "round(orders.amount, digits := 2)"),
         ("note LIKE '%x!%' ESCAPE '!'", "orders.note LIKE '%x!%' ESCAPE '!'"),
         ("coalesce(status, 'none') -- tidy", "coalesce(orders.status, 'none') -- tidy"),
+        ("ordered_at + INTERVAL '1' DAY", "orders.ordered_at + INTERVAL '1' DAY"),
+        ("ordered_at - INTERVAL (-1) DAY", "orders.ordered_at - INTERVAL (-1) DAY"),
+        ("ordered_at + INTERVAL (days) DAY", "orders.ordered_at + INTERVAL (orders.days) DAY"),
+        ("ordered_at + INTERVAL 1.5 HOUR", "orders.ordered_at + INTERVAL 1.5 HOUR"),
+        ("ordered_at AT TIME ZONE 'UTC'", "orders.ordered_at AT TIME ZONE 'UTC'"),
+        ("ordered_at AT TIME ZONE tz", "orders.ordered_at AT TIME ZONE orders.tz"),
+        (
+            "CAST(ordered_at AS TIMESTAMP WITH TIME ZONE)",
+            "CAST(orders.ordered_at AS TIMESTAMP WITH TIME ZONE)",
+        ),
+        ("ordered_at::timestamp with time zone", "orders.ordered_at::timestamp with time zone"),
+        ("time + 1", "orders.time + 1"),
+        ("zone || tz", "orders.zone || orders.tz"),
+        (
+            "ordered_at::timestamp without time zone",
+            "orders.ordered_at::timestamp without time zone",
+        ),
     ],
 )
 def test_columns_are_qualified(expr: str, expected: str | None) -> None:
@@ -303,6 +320,10 @@ def test_columns_are_qualified(expr: str, expected: str | None) -> None:
         "list_transform(tags, x -> upper(x))",
         "list_transform(tags, lambda x: upper(x))",
         "(SELECT max(amount) FROM orders)",
+        "[t * 2 FOR t IN tags]",
+        "list_sum([t FOR t IN tags IF t > 0])",
+        "(FROM other)",
+        "amount > (FROM other SELECT max(amount))",
     ],
 )
 def test_exprs_with_lambdas_or_subqueries_are_not_qualified(expr: str) -> None:

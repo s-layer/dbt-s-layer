@@ -10,7 +10,8 @@ two tables fails), then each public metric with and without them. A column the
 generator qualifies wrongly passes CREATE and fails only here (07-RESEARCH §4).
 
 The extension that loads depends on the installed duckdb: 0.16 on 2.0, 0.13 on
-1.5.6, 0.11 on 1.5.4 (the DuckDB inside dbt Fusion). CI runs this file on each.
+1.5.6, 0.11 on 1.5.4 (the DuckDB inside dbt Fusion). CI runs this file on each,
+with DBT_S_LAYER_DUCKDB_VERSION naming the duckdb it expects to have installed.
 Without network access the extension cannot be installed and the tests skip,
 unless DBT_S_LAYER_DUCKDB_EXTENSION=required, as in CI.
 """
@@ -43,6 +44,9 @@ _MEMBER_RE = re.compile(r"^  (PRIVATE )?(?:[a-z_][a-z0-9_]*\.)?([a-z_][a-z0-9_]*
 
 @pytest.fixture(scope="module")
 def connection() -> Iterator[Any]:
+    expected = os.environ.get("DBT_S_LAYER_DUCKDB_VERSION")
+    if expected is not None:
+        assert duckdb.__version__ == expected
     con = duckdb.connect()
     try:
         con.execute("INSTALL semantic_views FROM community")

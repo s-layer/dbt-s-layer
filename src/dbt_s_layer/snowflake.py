@@ -372,6 +372,24 @@ def _derived(metric: DerivedMetricSpec) -> str:
 # --- name shadowing (04-RESEARCH, open risk 2) ------------------------------------
 
 
+def _closes_interval_operand(tokens: list[SqlToken], i: int) -> bool:
+    """Whether `tokens[i]` directly follows an `INTERVAL`'s number, string or `(...)`."""
+    j = i - 1
+    if j < 0:
+        return False
+    before = tokens[j].text
+    if before == ")":
+        depth = 0
+        while j >= 0:
+            depth += {")": 1, "(": -1}.get(tokens[j].text, 0)
+            if depth == 0:
+                break
+            j -= 1
+    elif not (before[:1].isdigit() or before.startswith("'")):
+        return False
+    return j > 0 and tokens[j - 1].text.upper() == "INTERVAL"
+
+
 def _not_a_column(tokens: list[SqlToken], i: int, calls: list[tuple[str, int]]) -> bool:
     """
     Whether identifier `tokens[i]` is a type name, a date part or another non-column word.
@@ -397,9 +415,15 @@ def _not_a_column(tokens: list[SqlToken], i: int, calls: list[tuple[str, int]]) 
     # A typed literal (`DATE '2024-01-01'`): no column is followed by a string.
     if text(i + 1).startswith("'"):
         return True
-    # `INTERVAL 1 DAY`, `x COLLATE nocase`, `ORDER BY x NULLS FIRST`.
-    if text(i - 2) == "INTERVAL" and text(i - 1)[:1].isdigit():
+    # An interval's unit: `INTERVAL 1 DAY`, `INTERVAL '1' DAY`, `INTERVAL (n) DAY`.
+    if _closes_interval_operand(tokens, i):
         return True
+    # `AT TIME ZONE 'UTC'`, `TIMESTAMP WITH TIME ZONE`, `TIMESTAMP WITHOUT TIME ZONE`.
+    if text(i) in ("AT", "WITHOUT") and (text(i + 1), text(i + 2)) == ("TIME", "ZONE"):
+        return True
+    if (text(i), text(i + 1)) == ("TIME", "ZONE") or (text(i - 1), text(i)) == ("TIME", "ZONE"):
+        return True
+    # `x COLLATE nocase`, `ORDER BY x NULLS FIRST`.
     if text(i - 1) in ("COLLATE", "NULLS"):
         return True
     # A named argument: `round(x, digits := 2)`.

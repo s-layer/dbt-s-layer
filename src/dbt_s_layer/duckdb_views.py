@@ -201,9 +201,10 @@ def _synonyms(block: SLayerBlock | None) -> str:
 
 
 def _lambda_or_subquery(words: list[str]) -> bool:
-    """Whether an expr's significant tokens hold a lambda or a subquery."""
+    """Whether an expr's significant tokens hold a lambda, a subquery or a list comprehension."""
     for i, word in enumerate(words):
-        if word in ("LAMBDA", "SELECT"):
+        # `[x * 2 FOR x IN xs]` is a list comprehension; `(FROM t)` a FROM-first subquery.
+        if word in ("LAMBDA", "SELECT", "FOR") or (word == "FROM" and words[i - 1 : i] == ["("]):
             return True
         # `x -> x + 1` is a lambda; `j -> 'key'`, `j ->> '$.key'` and `j -> 0` read JSON.
         if word == "-" and words[i + 1 : i + 2] == [">"]:
@@ -217,9 +218,10 @@ def qualify(expr: str, alias: str) -> str | None:
     """
     Return `expr` with each of its column references qualified with `alias`.
 
-    Returns None when the expr holds a lambda or a subquery, whose names cannot be
-    told apart from the table's columns. Names already qualified, keywords, type
-    names, date parts, function names and named arguments are left as written.
+    Returns None when the expr holds a lambda, a subquery or a list comprehension,
+    whose names cannot be told apart from the table's columns. Names already
+    qualified, keywords, type names, date parts, function names and named arguments
+    are left as written.
     """
     tokens = scan_sql(expr)
     positions = [i for i, t in enumerate(tokens) if is_significant(t)]
