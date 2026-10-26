@@ -195,6 +195,11 @@ class ColumnConfig(_ManifestModel):
 
     meta: dict[str, object] = {}
 
+    @field_validator("meta", mode="before")
+    @classmethod
+    def _null_meta(cls, value: object) -> object:
+        return {} if value is None else value
+
 
 class ManifestColumn(_ManifestModel):
     """A `columns[*]` entry of a model node."""
@@ -203,6 +208,11 @@ class ManifestColumn(_ManifestModel):
     config: ColumnConfig = ColumnConfig()
     # The new-spec `dimension:` declared on the column, if any.
     dimension: dict[str, object] | None = None
+
+    @field_validator("config", mode="before")
+    @classmethod
+    def _null_config(cls, value: object) -> object:
+        return {} if value is None else value
 
     @field_validator("dimension", mode="before")
     @classmethod

@@ -243,7 +243,8 @@ def test_versioned_model_warning_names_every_lost_metric(make_project: MakeProje
         "        expr: customer_id\n"
     )
     for artifact in (project_dir / "target").iterdir():
-        os.utime(artifact, (yaml_file.stat().st_mtime + 10,) * 2)
+        newer = yaml_file.stat().st_mtime + 10
+        os.utime(artifact, (newer, newer))
     (warning,) = check_artifacts(project_dir).warnings
     assert "and so are its metrics 'cust_total', 'cust_count';" in warning
 

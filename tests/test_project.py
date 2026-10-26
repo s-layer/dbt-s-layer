@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Callable
 from dataclasses import FrozenInstanceError
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import pytest
 from metricflow_semantics.model.semantic_manifest_lookup import SemanticManifestLookup
@@ -15,6 +14,9 @@ from dbt_s_layer.artifacts import ManifestColumn
 from dbt_s_layer.errors import ArtifactInvalidError, ArtifactNotFoundError
 from dbt_s_layer.project import load_project, producer_label
 from tests.conftest import ARTIFACT_SETS, MakeProject
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 # What each fixture set must load as. dbt Core drops `customers` (a semantic
 # model on a versioned model), so its sets lack it and its metric.
