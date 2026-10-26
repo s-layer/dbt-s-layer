@@ -234,7 +234,7 @@ def member_name(member: DimensionSpec | MetricSpec | DerivedMetricSpec) -> str:
     return f"metric {member.name!r}"
 
 
-def _check_tag_values(spec: SemanticViewSpec) -> None:
+def check_tag_values(spec: SemanticViewSpec) -> None:
     """
     Raise `SLayerBlockError` naming every tag value over Snowflake's limit.
 
@@ -549,7 +549,7 @@ def render_snowflake(spec: SemanticViewSpec) -> str:
             f"sem__{spec.name}: a semantic view needs at least one dimension or metric."
         )
     check_name_shadowing(spec)
-    _check_tag_values(spec)
+    check_tag_values(spec)
     parts = [_clause("TABLES", [_table(t) for t in spec.tables])]
     if spec.relationships:
         parts.append(

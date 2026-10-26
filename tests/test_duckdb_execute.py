@@ -13,7 +13,13 @@ The extension that loads depends on the installed duckdb: 0.16 on 2.0, 0.13 on
 1.5.6, 0.11 on 1.5.4 (the DuckDB inside dbt Fusion). CI runs this file on each,
 with DBT_S_LAYER_DUCKDB_VERSION naming the duckdb it expects to have installed.
 Without network access the extension cannot be installed and the tests skip,
-unless DBT_S_LAYER_DUCKDB_EXTENSION=required, as in CI.
+unless DBT_S_LAYER_DUCKDB_EXTENSION=required, as in CI. DBT_S_LAYER_DUCKDB_EXTENSION_PATH
+loads a local build instead (unsigned).
+
+Members with an `s_layer` block get `WITH TAG`, which needs extension 0.17. The views
+are compiled with `s_layer_duckdb_tags` set to whether the loaded extension takes a
+TAG clause; when it does, every block's tags are read back from DESCRIBE.
+DBT_S_LAYER_DUCKDB_TAGS=required fails the run when it does not.
 """
 
 from __future__ import annotations
@@ -39,6 +45,10 @@ if TYPE_CHECKING:
 duckdb = pytest.importorskip("duckdb")
 
 # `  [PRIVATE ]<alias>.<name> ...` or `  [PRIVATE ]<name> AS ...` (a derived metric).
+# `NAME = 'value'` in a TAG clause; `''` is a quote.
+_TAG_RE = re.compile(r"(\w+) = '((?:[^']|'')*)'")
+# Members with an `s_layer` block a view leaves out: a joined table's key entity.
+SKIPPED_TAGGED = {"order_items": 1}
 _MEMBER_RE = re.compile(r"^  (PRIVATE )?(?:[a-z_][a-z0-9_]*\.)?([a-z_][a-z0-9_]*)\b")
 
 
@@ -47,16 +57,42 @@ def connection() -> Iterator[Any]:
     expected = os.environ.get("DBT_S_LAYER_DUCKDB_VERSION")
     if expected is not None:
         assert duckdb.__version__ == expected
-    con = duckdb.connect()
+    path = os.environ.get("DBT_S_LAYER_DUCKDB_EXTENSION_PATH")
+    con = duckdb.connect(config={"allow_unsigned_extensions": "true"} if path else {})
     try:
-        con.execute("INSTALL semantic_views FROM community")
-        con.execute("LOAD semantic_views")
+        if path:
+            con.execute(f"LOAD '{path}'")
+        else:
+            con.execute("INSTALL semantic_views FROM community")
+            con.execute("LOAD semantic_views")
     except duckdb.Error as exc:
         if os.environ.get("DBT_S_LAYER_DUCKDB_EXTENSION") == "required":
             raise
         pytest.skip(f"cannot load the semantic_views extension: {exc}")
     yield con
     con.close()
+
+
+@pytest.fixture(scope="module")
+def tags(connection: Any) -> bool:
+    """Whether the loaded extension takes a TAG clause (0.17+)."""
+    con = connection
+    con.execute("CREATE OR REPLACE TABLE _tag_probe AS SELECT 1 AS id")
+    try:
+        con.execute(
+            "CREATE OR REPLACE SEMANTIC VIEW _tag_probe_v AS TABLES (t AS _tag_probe "
+            "PRIMARY KEY (id)) DIMENSIONS (t.id AS t.id WITH TAG (S_LAYER_KIND = 'identifier'))"
+        )
+    except duckdb.Error:
+        supported = False
+    else:
+        # Before 0.17 the clause is no error: it is kept as part of the expression.
+        supported = bool(_described_tags(con, "_tag_probe_v"))
+        con.execute("DROP SEMANTIC VIEW _tag_probe_v")
+    con.execute("DROP TABLE _tag_probe")
+    if os.environ.get("DBT_S_LAYER_DUCKDB_TAGS") == "required":
+        assert supported, "the loaded semantic_views extension has no TAG clause"
+    return supported
 
 
 def _build_models(con: Any, set_name: str) -> dict[tuple[str, Any], str]:
@@ -73,14 +109,42 @@ def _build_models(con: Any, set_name: str) -> dict[tuple[str, Any], str]:
     return relations
 
 
-def _sql(body: str, relations: dict[tuple[str, Any], str]) -> str:
+def _sql(body: str, relations: dict[tuple[str, Any], str], *, tags: bool) -> str:
     def ref(*args: str, v: Any = None, version: Any = None) -> str:
         return relations[(args[-1], v if v is not None else version)]
 
     def config(**_: object) -> str:
         return ""
 
-    return jinja2.Environment(autoescape=False).from_string(body).render(ref=ref, config=config)
+    def var(name: str, default: object = None) -> object:
+        assert name == "s_layer_duckdb_tags"
+        return tags
+
+    env = jinja2.Environment(autoescape=False)
+    return env.from_string(body).render(ref=ref, config=config, var=var)
+
+
+def _written_tags(sql: str) -> dict[str, dict[str, str]]:
+    """Member name -> the tags its line of the compiled body writes."""
+    written: dict[str, dict[str, str]] = {}
+    for line in sql.splitlines():
+        match = _MEMBER_RE.match(line)
+        if match is None or " WITH TAG (" not in line:
+            continue
+        clause = line.split(" WITH TAG (", 1)[1]
+        written[match.group(2)] = {
+            name: value.replace("''", "'") for name, value in _TAG_RE.findall(clause)
+        }
+    return written
+
+
+def _described_tags(con: Any, view: str) -> dict[str, dict[str, str]]:
+    """Member name -> the tags DESCRIBE reports, for every tagged member."""
+    rows = con.execute(
+        f"SELECT object_name, property_value FROM describe_semantic_view('{view}') "
+        "WHERE property = 'TAGS' AND object_kind <> 'TABLE'"
+    ).fetchall()
+    return {name: json.loads(value) for name, value in rows}
 
 
 def _members(body: str) -> tuple[list[str], list[str]]:
@@ -108,7 +172,7 @@ def _query(con: Any, view: str, dimensions: list[str], metrics: list[str]) -> li
 
 @pytest.mark.parametrize("set_name", DUCKDB_SETS)
 def test_every_member_of_every_view_answers(
-    set_name: str, connection: Any, make_project: MakeProject
+    set_name: str, connection: Any, tags: bool, make_project: MakeProject
 ) -> None:
     con = connection
     relations = _build_models(con, set_name)
@@ -118,7 +182,15 @@ def test_every_member_of_every_view_answers(
     for view in views:
         body = render_duckdb(view).body
         name = f"sem__{set_name}_{view.name}"
-        con.execute(f"CREATE OR REPLACE SEMANTIC VIEW {name} AS {_sql(body, relations)}")
+        sql = _sql(body, relations, tags=tags)
+        con.execute(f"CREATE OR REPLACE SEMANTIC VIEW {name} AS {sql}")
+        if tags:
+            written = _written_tags(sql)
+            assert written == _described_tags(con, name), view.name
+            assert len(written) == sum(
+                m.s_layer is not None
+                for m in (*view.dimensions, *view.metrics, *view.derived_metrics)
+            ) - SKIPPED_TAGGED.get(view.name, 0), view.name
         dimensions, metrics = _members(body)
         assert dimensions or metrics, view.name
         if dimensions:
@@ -130,7 +202,7 @@ def test_every_member_of_every_view_answers(
 
 
 @pytest.mark.parametrize("set_name", DUCKDB_SETS)
-def test_the_numbers(set_name: str, connection: Any, make_project: MakeProject) -> None:
+def test_the_numbers(set_name: str, connection: Any, tags: bool, make_project: MakeProject) -> None:
     con = connection
     relations = _build_models(con, set_name)
     views = {
@@ -139,7 +211,8 @@ def test_the_numbers(set_name: str, connection: Any, make_project: MakeProject) 
     }
     for name in ("orders", "order_items"):
         body = render_duckdb(views[name]).body
-        con.execute(f"CREATE OR REPLACE SEMANTIC VIEW sem__{name} AS {_sql(body, relations)}")
+        sql = _sql(body, relations, tags=tags)
+        con.execute(f"CREATE OR REPLACE SEMANTIC VIEW sem__{name} AS {sql}")
     orders = _query(
         con,
         "sem__orders",
