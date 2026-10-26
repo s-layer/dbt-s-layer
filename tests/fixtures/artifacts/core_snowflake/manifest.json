@@ -1134,7 +1134,16 @@
       "dimensions": [
         {
           "config": {
-            "meta": {}
+            "meta": {
+              "s_layer": {
+                "synonyms": [
+                  "order status"
+                ],
+                "value": {
+                  "kind": "category"
+                }
+              }
+            }
           },
           "datatype": null,
           "description": null,
@@ -1148,7 +1157,13 @@
         },
         {
           "config": {
-            "meta": {}
+            "meta": {
+              "s_layer": {
+                "value": {
+                  "kind": "date"
+                }
+              }
+            }
           },
           "datatype": null,
           "description": null,
@@ -1167,7 +1182,13 @@
       "entities": [
         {
           "config": {
-            "meta": {}
+            "meta": {
+              "s_layer": {
+                "value": {
+                  "kind": "identifier"
+                }
+              }
+            }
           },
           "description": null,
           "expr": "order_id",

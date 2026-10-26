@@ -1,4 +1,5 @@
 {{ config(materialized='semantic_view', static_analysis='off') }}
+{%- set s_layer_tags = var('s_layer_tag_schema', target.database ~ '.' ~ target.schema) %}
 
 TABLES (
   order_items AS {{ ref('order_items') }}
@@ -21,9 +22,9 @@ DIMENSIONS (
   order_items.order_item AS order_item_id,
   order_items.ordered_at AS ordered_at,
   orders.customer AS customer_id,
-  orders."ORDER" AS order_id,
-  orders.ordered_at AS ordered_at,
-  orders.status AS status,
+  orders."ORDER" AS order_id WITH TAG ({{ s_layer_tags }}.S_LAYER_KIND = 'identifier', {{ s_layer_tags }}.S_LAYER_SPEC = '{"display":{"grouping":false}}'),
+  orders.ordered_at AS ordered_at WITH TAG ({{ s_layer_tags }}.S_LAYER_KIND = 'date', {{ s_layer_tags }}.S_LAYER_SPEC = '{"time":{"grain":"day"}}'),
+  orders.status AS status WITH SYNONYMS = ('order status') WITH TAG ({{ s_layer_tags }}.S_LAYER_KIND = 'category'),
   orders.store AS store_id,
   customers.country AS country,
   customers.customer AS customer_id,

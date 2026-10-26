@@ -19,7 +19,8 @@ from metricflow_semantic_interfaces.type_enums.aggregation_type import Aggregati
 from metricflow_semantic_interfaces.type_enums.entity_type import EntityType
 from metricflow_semantic_interfaces.type_enums.metric_type import MetricType
 
-from dbt_s_layer.errors import SemanticViewError
+from dbt_s_layer._project_yaml import read_dbt_project
+from dbt_s_layer.errors import SemanticViewError, SLayerBlockError
 from dbt_s_layer.refs import build_ref_map
 from dbt_s_layer.s_layer import read_s_layer_blocks
 from dbt_s_layer.sentinels import render_ref
@@ -106,6 +107,8 @@ class DimensionSpec:
     label: str | None = None
     # The member's `config.meta.s_layer` block, validated.
     s_layer: SLayerBlock | None = None
+    # True when the dimension is an entity, so errors name it as one.
+    entity: bool = False
 
 
 @dataclass(frozen=True)
@@ -623,6 +626,7 @@ class _Builder:
                     _description(e.description),
                     _label(e.label, e.name),
                     self.blocks.entities.get((alias, e.name)),
+                    entity=True,
                 )
                 for e in sm.entities
                 if e.type in _JOIN_TYPES and e.name not in taken
@@ -711,6 +715,11 @@ class SemanticViewResult:
     warnings: tuple[str, ...]
 
 
+def _has_s_layer(view: SemanticViewSpec) -> bool:
+    members = (*view.dimensions, *view.metrics, *view.derived_metrics)
+    return any(member.s_layer is not None for member in members)
+
+
 def render_semantic_views(project: SemanticProject, *, adapter: str) -> SemanticViewResult:
     """
     Render a semantic view model per semantic model for `adapter`, or warn it has none yet.
@@ -743,11 +752,17 @@ def render_semantic_views(project: SemanticProject, *, adapter: str) -> Semantic
     builder = _Builder(project, adapter)
     models: list[SemanticViewModel] = []
     warnings = set(builder.warnings)
+    # Tag values too long for the warehouse, collected across views so one run names them all.
+    too_long: set[str] = set()
+    tagged = False
     for name in sorted(builder.models):
         # One semantic model Snowflake cannot hold must not stop the others, or the exports.
         try:
             view, view_warnings = builder.view(name)
             rendered = render(view)
+        except SLayerBlockError as exc:
+            too_long.update(exc.problems)
+            continue
         except SemanticViewError as exc:
             # Only the skip is reported: the view's own warnings describe a view not written.
             reason = str(exc).removeprefix(f"sem__{name}: ")
@@ -755,6 +770,7 @@ def render_semantic_views(project: SemanticProject, *, adapter: str) -> Semantic
             continue
         warnings |= view_warnings
         warnings.update(rendered.warnings)
+        tagged = tagged or _has_s_layer(view)
         models.append(
             SemanticViewModel(
                 semantic_model=view.name,
@@ -766,6 +782,13 @@ def render_semantic_views(project: SemanticProject, *, adapter: str) -> Semantic
                 comment_prefix=comment_prefix,
             )
         )
+    if too_long:
+        count = len(too_long)
+        raise SLayerBlockError(
+            f"tag values too long for {adapter.capitalize()} ({count} "
+            f"problem{'' if count == 1 else 's'}): " + "; ".join(sorted(too_long)),
+            problems=tuple(sorted(too_long)),
+        )
     if (
         adapter == "snowflake"
         and snowflake.MATERIALIZATION_MACRO not in project.dbt_manifest.macros
@@ -775,6 +798,16 @@ def render_semantic_views(project: SemanticProject, *, adapter: str) -> Semantic
             f"has no {snowflake.MATERIALIZATION_MACRO}). Add Snowflake-Labs/{snowflake.PACKAGE} "
             "to packages.yml and run `dbt deps`; until then `dbt run` fails on the sem__ models."
         )
+    if adapter == "snowflake" and tagged:
+        hooks = str(read_dbt_project(project.project_dir).get("on-run-start"))
+        missing = [tag for tag in snowflake.TAG_NAMES if tag not in hooks]
+        if missing:
+            warnings.add(
+                "semantic views: members with an s_layer block carry the tags "
+                f"{', '.join(snowflake.TAG_NAMES)}, but no on-run-start hook in "
+                f"dbt_project.yml creates {', '.join(missing)}. Add the hooks from the README "
+                'section "Snowflake tags"; until then `dbt run` fails on the sem__ models.'
+            )
     if (
         adapter == "databricks"
         and databricks.MATERIALIZATION_MACRO not in project.dbt_manifest.macros

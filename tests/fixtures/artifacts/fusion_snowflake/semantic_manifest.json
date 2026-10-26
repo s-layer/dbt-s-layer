@@ -1,7 +1,16 @@
 {
   "metrics": [
     {
-      "config": null,
+      "config": {
+        "meta": {
+          "s_layer": {
+            "value": {
+              "currency": "USD",
+              "kind": "currency"
+            }
+          }
+        }
+      },
       "description": null,
       "filter": null,
       "label": "average_order_value",
@@ -191,7 +200,25 @@
       }
     },
     {
-      "config": null,
+      "config": {
+        "meta": {
+          "s_layer": {
+            "display": {
+              "decimals": {
+                "max": 0
+              }
+            },
+            "synonyms": [
+              "sales",
+              "turnover"
+            ],
+            "value": {
+              "currency": "USD",
+              "kind": "currency"
+            }
+          }
+        }
+      },
       "description": null,
       "filter": null,
       "label": "Revenue",
@@ -700,7 +727,15 @@
           "type_params": null
         },
         {
-          "config": null,
+          "config": {
+            "meta": {
+              "s_layer": {
+                "value": {
+                  "kind": "date"
+                }
+              }
+            }
+          },
           "description": null,
           "expr": "ordered_at",
           "is_partition": false,

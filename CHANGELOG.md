@@ -27,6 +27,9 @@ All notable changes to this project are documented here. The format follows
 - `s_layer` blocks in a metric's, dimension's or entity's `config.meta` are validated against
   the S-LAYER vocabulary ([s-layer-semantic-formats](https://github.com/s-layer/semantic-formats));
   `generate` and `check` stop on an invalid block, naming each one.
+- Snowflake semantic view members with an `s_layer` block get its synonyms as `WITH SYNONYMS`
+  and the tags `S_LAYER_KIND`, `S_LAYER_LABEL` and `S_LAYER_SPEC`, which say what each member
+  means. The README shows the `on-run-start` hooks that create the tags.
 
 ### Known limitations
 

@@ -10,6 +10,10 @@ semantic_models:
       - name: order
         type: primary
         expr: order_id
+        config:
+          meta:
+            s_layer:
+              value: {kind: identifier}
       - name: customer
         type: foreign
         expr: customer_id
@@ -19,10 +23,19 @@ semantic_models:
     dimensions:
       - name: status
         type: categorical
+        config:
+          meta:
+            s_layer:
+              value: {kind: category}
+              synonyms: [order status]
       - name: ordered_at
         type: time
         type_params:
           time_granularity: day
+        config:
+          meta:
+            s_layer:
+              value: {kind: date}
     measures:
       - name: order_total
         agg: sum
@@ -48,6 +61,12 @@ metrics:
     label: Revenue
     type_params:
       measure: order_total
+    config:
+      meta:
+        s_layer:
+          value: {kind: currency, currency: USD}
+          display: {decimals: {max: 0}}
+          synonyms: [sales, turnover]
   - name: revenue_cumulative
     type: cumulative
     type_params:
@@ -74,6 +93,10 @@ metrics:
     type_params:
       numerator: revenue
       denominator: order_count
+    config:
+      meta:
+        s_layer:
+          value: {kind: currency, currency: USD}
   - name: revenue_doubled
     type: derived
     label: Revenue x2

@@ -385,11 +385,11 @@ def test_comments_come_from_descriptions(make_project: MakeProject) -> None:
 def test_dimensions_include_entities(set_name: str, make_project: MakeProject) -> None:
     items = _view(_build(make_project(set_name)), "order_items")
     assert items.dimensions == (
-        DimensionSpec(table="order_items", name="order", expr="order_id"),
-        DimensionSpec(table="order_items", name="order_item", expr="order_item_id"),
+        DimensionSpec(table="order_items", name="order", expr="order_id", entity=True),
+        DimensionSpec(table="order_items", name="order_item", expr="order_item_id", entity=True),
         DimensionSpec(table="order_items", name="ordered_at", expr="ordered_at"),
-        DimensionSpec(table="orders", name="customer", expr="customer_id"),
-        DimensionSpec(table="orders", name="order", expr="order_id"),
+        DimensionSpec(table="orders", name="customer", expr="customer_id", entity=True),
+        DimensionSpec(table="orders", name="order", expr="order_id", entity=True),
         DimensionSpec(table="orders", name="ordered_at", expr="ordered_at"),
     )
 

@@ -169,6 +169,45 @@ models, so `generate`, `check` and `doctor` warn when it is missing. `static_ana
 stops Fusion from parsing the DDL as a query. The generated models compile on dbt Core 1.12 and
 Fusion 2.0.8; they have not yet been run against a Snowflake account.
 
+### Snowflake tags
+
+A dimension or metric with an [`s_layer` block](#describing-what-a-field-means-s_layer) carries
+it into the view. Its `synonyms` become `WITH SYNONYMS`, and three tags say what it means:
+
+| Tag             | Value                                                                    |
+| --------------- | ------------------------------------------------------------------------ |
+| `S_LAYER_KIND`  | the block's `value.kind`, such as `currency`                              |
+| `S_LAYER_LABEL` | the member's dbt `label`, when it has one                                |
+| `S_LAYER_SPEC`  | the rest of the block as compact JSON (left out when there is no rest)    |
+
+```sql
+orders.revenue AS SUM(amount) WITH SYNONYMS = ('sales', 'turnover')
+  WITH TAG (S_LAYER.DBT.S_LAYER_KIND = 'currency', S_LAYER.DBT.S_LAYER_LABEL = 'Revenue',
+            S_LAYER.DBT.S_LAYER_SPEC = '{"value":{"currency":"USD"}}')
+```
+
+Members without a block get no tags, so a project with no blocks needs nothing below. An
+`S_LAYER_LABEL` or `S_LAYER_SPEC` longer than Snowflake's 256-character tag limit is never
+truncated: `generate` stops with an error naming every such member.
+
+The tag objects must exist before the views are built. They live in
+`<target database>.<target schema>` unless you set the `s_layer_tag_schema` var to another
+`<database>.<schema>`. Create them with these `on-run-start` hooks in `dbt_project.yml`
+(`generate` warns when a tag name is missing from them; if you create the tags some other way,
+such as with a macro, it keeps warning):
+
+```yaml
+on-run-start:
+  - "create schema if not exists {{ var('s_layer_tag_schema', target.database ~ '.' ~ target.schema) }}"
+  - "create tag if not exists {{ var('s_layer_tag_schema', target.database ~ '.' ~ target.schema) }}.S_LAYER_KIND"
+  - "create tag if not exists {{ var('s_layer_tag_schema', target.database ~ '.' ~ target.schema) }}.S_LAYER_LABEL"
+  - "create tag if not exists {{ var('s_layer_tag_schema', target.database ~ '.' ~ target.schema) }}.S_LAYER_SPEC"
+```
+
+Object tagging needs Snowflake Enterprise Edition or higher. Read the tags back with
+`TAG_REFERENCES`, one member at a time: `'<db>.<schema>.<view>!<TABLE>.<MEMBER>'` with the domain
+`'SEMANTIC DIMENSION'` or `'SEMANTIC METRIC'` (`'<view>!<METRIC>'` for a view-level metric).
+
 ## Metric views (Databricks)
 
 On a Databricks target, each semantic model becomes `sem__<semantic_model>.sql`, which

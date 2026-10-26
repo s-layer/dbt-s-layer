@@ -20,18 +20,34 @@ models:
           type: foreign
           name: store
       - name: status
+        # S-LAYER blocks: on the column for status, on the dimension for ordered_at.
+        config:
+          meta:
+            s_layer:
+              value: {kind: category}
+              synonyms: [order status]
         dimension:
           type: categorical
       - name: ordered_at
         granularity: day
         dimension:
           type: time
+          config:
+            meta:
+              s_layer:
+                value: {kind: date}
     metrics:
       - name: revenue
         type: simple
         label: Revenue
         agg: sum
         expr: amount
+        config:
+          meta:
+            s_layer:
+              value: {kind: currency, currency: USD}
+              display: {decimals: {max: 0}}
+              synonyms: [sales, turnover]
       - name: revenue_cumulative
         type: cumulative
         input_metric: revenue
@@ -57,6 +73,10 @@ models:
         type: ratio
         numerator: revenue
         denominator: order_count
+        config:
+          meta:
+            s_layer:
+              value: {kind: currency, currency: USD}
       - name: revenue_doubled
         type: derived
         expr: rev * 2

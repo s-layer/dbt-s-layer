@@ -19,6 +19,7 @@ download dbt_semantic_view. CI installs neither engine, so there it skips.
 from __future__ import annotations
 
 import json
+import re
 from typing import TYPE_CHECKING, Any
 
 import pytest
@@ -81,3 +82,7 @@ def test_generated_semantic_views_compile(kind: str, project: str, tmp_path: Pat
         assert "TABLES (" in text
         assert "{{" not in text
         assert "ref(" not in text
+        members = (*view.dimensions, *view.metrics, *view.derived_metrics)
+        if any(m.s_layer is not None for m in members):
+            # The tag names come out qualified with the target's database and schema.
+            assert re.search(r"\b\w+\.\w+\.S_LAYER_KIND = '", text), text

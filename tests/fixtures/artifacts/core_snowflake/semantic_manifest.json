@@ -45,7 +45,23 @@
     },
     {
       "config": {
-        "meta": {}
+        "meta": {
+          "s_layer": {
+            "display": {
+              "decimals": {
+                "max": 0
+              }
+            },
+            "synonyms": [
+              "sales",
+              "turnover"
+            ],
+            "value": {
+              "currency": "USD",
+              "kind": "currency"
+            }
+          }
+        }
       },
       "datatype": null,
       "description": "",
@@ -265,7 +281,14 @@
     },
     {
       "config": {
-        "meta": {}
+        "meta": {
+          "s_layer": {
+            "value": {
+              "currency": "USD",
+              "kind": "currency"
+            }
+          }
+        }
       },
       "datatype": null,
       "description": "",
@@ -753,7 +776,16 @@
       "dimensions": [
         {
           "config": {
-            "meta": {}
+            "meta": {
+              "s_layer": {
+                "synonyms": [
+                  "order status"
+                ],
+                "value": {
+                  "kind": "category"
+                }
+              }
+            }
           },
           "datatype": null,
           "description": null,
@@ -767,7 +799,13 @@
         },
         {
           "config": {
-            "meta": {}
+            "meta": {
+              "s_layer": {
+                "value": {
+                  "kind": "date"
+                }
+              }
+            }
           },
           "datatype": null,
           "description": null,
@@ -786,7 +824,13 @@
       "entities": [
         {
           "config": {
-            "meta": {}
+            "meta": {
+              "s_layer": {
+                "value": {
+                  "kind": "identifier"
+                }
+              }
+            }
           },
           "description": null,
           "expr": "order_id",
