@@ -197,6 +197,27 @@ semantic_models:
     assert declared["orders"].file == project / "models/new.yml"
 
 
+def test_declared_semantic_model_metrics_skip_disabled_ones(tmp_path: Path) -> None:
+    project = _project(
+        tmp_path,
+        {
+            "models/new.yml": """\
+models:
+  - name: customers
+    semantic_model: true
+    metrics:
+      - name: Cust_Total
+      - name: cust_old
+        config:
+          enabled: false
+      - name: cust_count
+""",
+        },
+    )
+    (declared,) = scan_semantic_yaml(project).declared_semantic_models
+    assert declared.metrics == ("cust_total", "cust_count")
+
+
 # --- check_artifacts --------------------------------------------------------
 
 
@@ -209,6 +230,23 @@ def test_fresh_core_artifacts_warn_about_the_versioned_model(make_project: MakeP
     assert "models/marts/customers.yml" in warning
     assert "dbt Core 1.12.6" in warning
     assert "versioned" in warning
+    # The metric declared on the dropped model is gone too.
+    assert "and so is its metric 'cust_total';" in warning
+
+
+def test_versioned_model_warning_names_every_lost_metric(make_project: MakeProject) -> None:
+    project_dir = make_project("core_new")
+    yaml_file = project_dir / "models/marts/customers.yml"
+    yaml_file.write_text(
+        yaml_file.read_text()
+        + "      - name: cust_count\n        type: simple\n        agg: count\n"
+        "        expr: customer_id\n"
+    )
+    for artifact in (project_dir / "target").iterdir():
+        newer = yaml_file.stat().st_mtime + 10
+        os.utime(artifact, (newer, newer))
+    (warning,) = check_artifacts(project_dir).warnings
+    assert "and so are its metrics 'cust_total', 'cust_count';" in warning
 
 
 @pytest.mark.parametrize("set_name", ["fusion_new", "core_legacy"])

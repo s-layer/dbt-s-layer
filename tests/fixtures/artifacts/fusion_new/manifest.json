@@ -414,15 +414,29 @@
           "tags": []
         },
         "ordered_at": {
-          "config": {},
+          "config": {
+            "meta": {
+              "column_only": true,
+              "source": "column"
+            }
+          },
           "constraints": [],
           "description": "",
           "dimension": {
+            "config": {
+              "meta": {
+                "dimension_only": true,
+                "source": "dimension"
+              }
+            },
             "name": "ordered_at",
             "type": "time"
           },
           "granularity": "day",
-          "meta": {},
+          "meta": {
+            "column_only": true,
+            "source": "column"
+          },
           "name": "ordered_at",
           "tags": []
         }
@@ -841,7 +855,12 @@
       "description": "",
       "dimensions": [
         {
-          "config": null,
+          "config": {
+            "meta": {
+              "dimension_only": true,
+              "source": "dimension"
+            }
+          },
           "description": null,
           "expr": "ordered_at",
           "is_partition": false,

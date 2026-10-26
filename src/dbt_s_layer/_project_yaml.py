@@ -56,6 +56,9 @@ class DeclaredSemanticModel:
     legacy: bool
     # Attached to a versioned model (the entry has `versions:`).
     versioned: bool
+    # Lowercased names of the metrics declared on the same `models:` entry
+    # (new spec), which go wherever the semantic model goes.
+    metrics: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -101,6 +104,11 @@ def _mappings(value: object) -> list[dict[str, object]]:
     ]
 
 
+def _disabled(entry: dict[str, object]) -> bool:
+    config = entry.get("config")
+    return isinstance(config, dict) and cast("dict[str, object]", config).get("enabled") is False
+
+
 def _declarations(data: dict[str, object], file: Path) -> tuple[bool, list[DeclaredSemanticModel]]:
     """Return whether the file is semantic YAML, and the enabled semantic models it declares."""
     counts = any(key in data for key in _SEMANTIC_TOP_LEVEL_KEYS)
@@ -126,9 +134,14 @@ def _declarations(data: dict[str, object], file: Path) -> tuple[bool, list[Decla
         else:
             enabled = config is not False and config is not None
         if enabled and isinstance(name, str):
+            metrics = (m.get("name") for m in _mappings(entry.get("metrics")) if not _disabled(m))
             declared.append(
                 DeclaredSemanticModel(
-                    name.lower(), file, legacy=False, versioned="versions" in entry
+                    name.lower(),
+                    file,
+                    legacy=False,
+                    versioned="versions" in entry,
+                    metrics=tuple(m.lower() for m in metrics if isinstance(m, str)),
                 )
             )
 

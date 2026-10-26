@@ -210,7 +210,11 @@
       "dimensions": [
         {
           "config": {
-            "meta": {}
+            "meta": {
+              "column_only": true,
+              "dimension_only": true,
+              "source": "dimension"
+            }
           },
           "datatype": null,
           "description": "",

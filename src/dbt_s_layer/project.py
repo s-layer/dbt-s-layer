@@ -6,6 +6,10 @@ import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from metricflow_semantic_interfaces.implementations.element_config import (
+    PydanticSemanticLayerElementConfig,
+)
+
 from dbt_s_layer.artifacts import (
     DBT_MANIFEST,
     SEMANTIC_MANIFEST,
@@ -75,9 +79,52 @@ def load_project(project_dir: Path) -> SemanticProject:
             f"{dbt_manifest.metadata.project_name!r}, but {project_dir} is project "
             f"{project_name!r}. Re-run `dbt parse` in {project_dir}."
         )
+    producer = producer_label(dbt_manifest.metadata.dbt_version)
+    _merge_column_meta(semantic_manifest, dbt_manifest, producer)
     return SemanticProject(
         project_dir=project_dir,
         semantic_manifest=semantic_manifest,
         dbt_manifest=dbt_manifest,
-        producer=producer_label(dbt_manifest.metadata.dbt_version),
+        producer=producer,
     )
+
+
+def _merge_column_meta(
+    semantic_manifest: PydanticSemanticManifest, dbt_manifest: DbtManifest, producer: str
+) -> None:
+    """
+    Give every dimension the `config.meta` dbt Core would, whichever engine parsed.
+
+    dbt Core merges a column's `config.meta` into the new-spec dimension declared on
+    it, the dimension's own keys winning. Fusion writes only the dimension's own
+    meta, or `config: null`. manifest.json keeps the column meta on both engines, so
+    for Fusion the merge is redone from it here (Fusion reads no legacy-spec semantic
+    models, so every one is new-spec). Dimensions without a config get an empty one.
+    """
+    fusion = producer.startswith("Fusion")
+    for semantic_model in semantic_manifest.semantic_models:
+        column_meta = _column_meta(dbt_manifest, semantic_model.name) if fusion else {}
+        for dimension in semantic_model.dimensions:
+            own = {} if dimension.config is None else dimension.config.meta
+            merged = {**column_meta.get(dimension.name, {}), **own}
+            dimension.config = PydanticSemanticLayerElementConfig(meta=merged)
+
+
+def _column_meta(dbt_manifest: DbtManifest, semantic_model: str) -> dict[str, dict[str, object]]:
+    """Map each dimension declared on a column of the semantic model's node to its meta."""
+    matches = [
+        sm for sm in dbt_manifest.semantic_models.values() if sm.name.lower() == semantic_model
+    ]
+    # Missing or ambiguous: `refs.build_ref_map` reports it, so don't guess here.
+    if len(matches) != 1:
+        return {}
+    meta: dict[str, dict[str, object]] = {}
+    for node_id in matches[0].depends_on.nodes:
+        node = dbt_manifest.nodes.get(node_id)
+        if node is None:
+            continue
+        for column in node.columns.values():
+            name = column.dimension_name
+            if name is not None:
+                meta[name.lower()] = column.config.meta
+    return meta

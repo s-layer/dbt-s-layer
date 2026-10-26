@@ -277,7 +277,12 @@
       "description": "",
       "dimensions": [
         {
-          "config": null,
+          "config": {
+            "meta": {
+              "dimension_only": true,
+              "source": "dimension"
+            }
+          },
           "description": null,
           "expr": "ordered_at",
           "is_partition": false,

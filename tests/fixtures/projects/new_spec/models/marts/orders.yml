@@ -14,8 +14,18 @@ models:
           name: customer
       - name: ordered_at
         granularity: day
+        # Column meta and dimension meta: dbt Core merges both into the
+        # dimension's config.meta, Fusion keeps only the dimension's own.
+        config:
+          meta:
+            source: column
+            column_only: true
         dimension:
           type: time
+          config:
+            meta:
+              source: dimension
+              dimension_only: true
     metrics:
       - name: revenue
         type: simple

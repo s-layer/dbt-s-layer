@@ -507,14 +507,22 @@
         },
         "ordered_at": {
           "config": {
-            "meta": {},
+            "meta": {
+              "column_only": true,
+              "source": "column"
+            },
             "tags": []
           },
           "constraints": [],
           "data_type": null,
           "description": "",
           "dimension": {
-            "config": {},
+            "config": {
+              "meta": {
+                "dimension_only": true,
+                "source": "dimension"
+              }
+            },
             "description": "",
             "is_partition": false,
             "label": null,
@@ -525,7 +533,10 @@
           "doc_blocks": [],
           "entity": null,
           "granularity": "day",
-          "meta": {},
+          "meta": {
+            "column_only": true,
+            "source": "column"
+          },
           "name": "ordered_at",
           "quote": null,
           "tags": []
@@ -796,7 +807,11 @@
       "dimensions": [
         {
           "config": {
-            "meta": {}
+            "meta": {
+              "column_only": true,
+              "dimension_only": true,
+              "source": "dimension"
+            }
           },
           "datatype": null,
           "description": "",

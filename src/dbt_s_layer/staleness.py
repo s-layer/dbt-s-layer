@@ -137,6 +137,7 @@ def check_artifacts(project_dir: Path) -> ArtifactCheck:
         _check_removed(project, scan, semantic_manifest)
 
     present = {sm.name.lower() for sm in project.semantic_manifest.semantic_models}
+    present_metrics = {m.name.lower() for m in project.semantic_manifest.metrics}
     warnings = list(scan.warnings)
     dropped: list[str] = []
     reported: set[str] = set()
@@ -145,9 +146,14 @@ def check_artifacts(project_dir: Path) -> ArtifactCheck:
             continue
         reported.add(declared.name)
         hint = _missing_hint(declared, project.producer)
+        lost = [m for m in declared.metrics if m not in present_metrics]
+        also = ""
+        if lost:
+            verb, noun = ("is", "metric") if len(lost) == 1 else ("are", "metrics")
+            also = f", and so {verb} its {noun} {', '.join(map(repr, lost))}"
         warning = (
             f"semantic model {declared.name!r} is declared in {_rel(declared.file, project_dir)} "
-            f"but missing from {SEMANTIC_MANIFEST} (produced by {project.producer}){hint}"
+            f"but missing from {SEMANTIC_MANIFEST} (produced by {project.producer}){also}{hint}"
         )
         warnings.append(warning)
         if hint:
