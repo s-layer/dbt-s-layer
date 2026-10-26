@@ -272,6 +272,38 @@ and `doctor` warn. The generated models have been built on a Databricks SQL ware
 dbt Core 1.12.5 + dbt-databricks 1.12.7 and with Fusion 2.0.8, and every measure matched plain
 SQL over the same tables.
 
+### Databricks tags
+
+A dimension or metric with an [`s_layer` block](#describing-what-a-field-means-s_layer) gets
+its `synonyms` as the field's `synonyms` (at most 10, each up to 255 characters), and two
+Unity Catalog column tags on the metric view:
+
+| Tag            | Value                                                                  |
+| -------------- | ---------------------------------------------------------------------- |
+| `S_LAYER_KIND` | the block's `value.kind`, such as `currency`                            |
+| `S_LAYER_SPEC` | the rest of the block as compact JSON (left out when there is no rest)  |
+
+The dbt `label` is already the field's `display_name`, so it has no tag. A metric view cannot
+carry column tags in its definition, so the model sets them in a `post_hook` after every
+build, one `alter table ... alter column ... set tags` per field:
+
+```yaml
+{{ config(
+    materialized='metric_view',
+    static_analysis='off',
+    view_update_via_alter=false,
+    post_hook=[
+        'alter table {{ this }} alter column `status` set tags (\'S_LAYER_KIND\' = \'category\')'
+    ]
+) }}
+```
+
+The view is always rebuilt with `create or replace`, which drops every column tag, so a tag a
+block no longer has does not linger. A synonym list or `S_LAYER_SPEC` over the limits stops
+`generate` with an error naming every such member. Members without a block get no tags or
+synonyms. Read the tags back from `<catalog>.information_schema.column_tags`, filtering on
+`schema_name` and `table_name`.
+
 ## Describing what a field means (`s_layer`)
 
 A metric, dimension or entity can say what its values mean in an `s_layer` block under

@@ -72,6 +72,11 @@ def test_generated_metric_views_compile(kind: str, project: str, tmp_path: Path)
     for view in build_semantic_views(loaded, adapter="databricks").views:
         node = nodes[f"sem__{view.name}"]
         assert node["config"]["materialized"] == "metric_view"
+        if view.name == "orders":
+            # Members with an s_layer block get their Unity Catalog column tags after the build.
+            assert node["config"]["view_update_via_alter"] is False
+            hooks = [hook["sql"] for hook in node["config"]["post-hook"]]
+            assert any("`revenue` set tags ('S_LAYER_KIND' = 'currency'" in h for h in hooks)
         expected = sorted(refs[t.semantic_model].node_id for t in view.tables)
         assert sorted(node["depends_on"]["nodes"]) == expected
         compiled = next((project_dir / "target" / "compiled").rglob(f"sem__{view.name}.sql"))

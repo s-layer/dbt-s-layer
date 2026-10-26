@@ -752,7 +752,7 @@ def render_semantic_views(project: SemanticProject, *, adapter: str) -> Semantic
     builder = _Builder(project, adapter)
     models: list[SemanticViewModel] = []
     warnings = set(builder.warnings)
-    # Tag values too long for the warehouse, collected across views so one run names them all.
+    # S-LAYER values the warehouse cannot hold, collected across views so one run names them all.
     too_long: set[str] = set()
     tagged = False
     for name in sorted(builder.models):
@@ -785,7 +785,7 @@ def render_semantic_views(project: SemanticProject, *, adapter: str) -> Semantic
     if too_long:
         count = len(too_long)
         raise SLayerBlockError(
-            f"tag values too long for {adapter.capitalize()} ({count} "
+            f"S-LAYER values {adapter.capitalize()} cannot hold ({count} "
             f"problem{'' if count == 1 else 's'}): " + "; ".join(sorted(too_long)),
             problems=tuple(sorted(too_long)),
         )

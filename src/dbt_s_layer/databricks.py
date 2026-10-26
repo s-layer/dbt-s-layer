@@ -18,14 +18,23 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from dbt_s_layer.errors import SemanticViewError
+from s_layer_semantic_formats import (
+    SpecTooLongError,
+    spec_tag_value,
+    to_compact_json,
+)
+
+from dbt_s_layer.errors import SemanticViewError, SLayerBlockError
 from dbt_s_layer.semantic_views import MetricRef, RenderedView, is_bare_identifier
-from dbt_s_layer.sentinels import escape_jinja, has_reserved_prefix, postflight
-from dbt_s_layer.snowflake import SIMPLE_AGGREGATIONS, column_references
+from dbt_s_layer.sentinels import escape_jinja, has_reserved_prefix, jinja_literal, postflight
+from dbt_s_layer.snowflake import SIMPLE_AGGREGATIONS, column_references, member_name
 
 if TYPE_CHECKING:
+    from s_layer_semantic_formats import SLayerBlock
+
     from dbt_s_layer.semantic_views import (
         DerivedMetricSpec,
+        DimensionSpec,
         MetricSpec,
         RelationshipSpec,
         SemanticViewSpec,
@@ -35,6 +44,14 @@ if TYPE_CHECKING:
 # In manifest.json `macros` when dbt-databricks has the materialization (>= 1.12.0).
 MATERIALIZATION_MACRO = "macro.dbt_databricks.materialization_metric_view_databricks"
 CONFIG = "{{ config(materialized='metric_view', static_analysis='off') }}"
+# The Unity Catalog column tags a member with an `s_layer` block gets. Its label is
+# the field's `display_name`, so it needs no tag.
+TAG_NAMES = ("S_LAYER_KIND", "S_LAYER_SPEC")
+# https://docs.databricks.com/aws/en/metric-views/data-modeling/semantic-metadata
+MAX_SYNONYMS = 10
+MAX_SYNONYM_LENGTH = 255
+# https://docs.databricks.com/aws/en/database-objects/tags
+MAX_TAG_VALUE_LENGTH = 256
 # Comments and display names need spec 1.1, as do nested joins (DBR 17.3+).
 SPEC_VERSION = "1.1"
 # The name a metric view gives its root table.
@@ -106,16 +123,103 @@ class _Element:
     expr: str
     shown: str
     lines: tuple[str, ...]
+    # The member it renders, when the member has an `s_layer` block.
+    member: DimensionSpec | MetricSpec | DerivedMetricSpec | None = None
 
 
-def _item(name: str, expr: str, *, label: str | None, comment: str | None) -> list[str]:
+def _item(
+    name: str,
+    expr: str,
+    *,
+    label: str | None,
+    comment: str | None,
+    s_layer: SLayerBlock | None = None,
+) -> list[str]:
     lines = [f"  - name: {_text(name)}"]
     if label is not None:
         lines.append(f"    display_name: {_text(label)}")
     if comment is not None:
         lines.append(f"    comment: {_text(comment)}")
+    if s_layer is not None and s_layer.synonyms:
+        lines.append("    synonyms:")
+        lines += [f"      - {_text(synonym)}" for synonym in s_layer.synonyms]
     lines.append(f"    expr: {_text(expr)}")
     return lines
+
+
+def _check_s_layer(elements: list[_Element]) -> None:
+    """
+    Raise `SLayerBlockError` naming every S-LAYER value Databricks cannot hold.
+
+    Nothing is truncated: a synonym list or tag value over the limit stops
+    `generate`, not `dbt run`.
+    """
+    problems: list[str] = []
+    for element in elements:
+        member = element.member
+        if member is None or member.s_layer is None:
+            continue
+        where = member_name(member)
+        synonyms = member.s_layer.synonyms or ()
+        if len(synonyms) > MAX_SYNONYMS:
+            problems.append(
+                f"{where}: {len(synonyms)} synonyms, over the Databricks limit of {MAX_SYNONYMS}"
+            )
+        problems += [
+            f"{where}: synonym {synonym[:40]!r}... is {len(synonym)} characters, over the "
+            f"Databricks limit of {MAX_SYNONYM_LENGTH}"
+            for synonym in synonyms
+            if len(synonym) > MAX_SYNONYM_LENGTH
+        ]
+        try:
+            spec_tag_value(member.s_layer, MAX_TAG_VALUE_LENGTH)
+        except SpecTooLongError as exc:
+            problems.append(f"{where}: {exc}")
+    if problems:
+        raise SLayerBlockError("; ".join(problems), problems=tuple(problems))
+
+
+def _sql_string(text: str) -> str:
+    """A Databricks SQL string literal. Not `''`: Spark reads `'a''b'` as `'a' 'b'`."""
+    return "'" + text.replace("\\", "\\\\").replace("'", "\\'") + "'"
+
+
+def _tag_hook(element: _Element) -> str | None:
+    """The post-hook that sets an element's column tags, as a Jinja string literal."""
+    block = None if element.member is None else element.member.s_layer
+    if block is None:
+        return None
+    tags = [("S_LAYER_KIND", block.kind)]
+    spec = to_compact_json(block)
+    if spec != "{}":
+        tags.append(("S_LAYER_SPEC", spec))
+    column = "`" + element.name.replace("`", "``") + "`"
+    pairs = ", ".join(f"{_sql_string(name)} = {_sql_string(value)}" for name, value in tags)
+    hook = "alter table {{ this }} alter column " + escape_jinja(f"{column} set tags ({pairs})")
+    return jinja_literal(hook)
+
+
+def _config(hooks: list[str]) -> str:
+    """
+    The model's `config()`: tagged views also re-set their column tags after every run.
+
+    `create or replace` wipes a metric view's column tags, so they are set again
+    after each build, and the view is never updated with ALTER VIEW, which could
+    keep tags a block no longer has.
+    """
+    if not hooks:
+        return CONFIG
+    lines = [
+        "{{ config(",
+        "    materialized='metric_view',",
+        "    static_analysis='off',",
+        "    view_update_via_alter=false,",
+        "    post_hook=[",
+        ",\n".join(f"        {hook}" for hook in hooks),
+        "    ]",
+        ") }}",
+    ]
+    return "\n".join(lines)
 
 
 def _joins(
@@ -164,7 +268,9 @@ def _aggregate(view: str, metric: MetricSpec, expr: str) -> str:
 
 def _measure(view: str, metric: MetricSpec, place: _Place) -> _Element:
     shown = _aggregate(view, metric, _column(place, metric.expr))
-    lines = _item(metric.name, shown, label=metric.label, comment=metric.comment)
+    lines = _item(
+        metric.name, shown, label=metric.label, comment=metric.comment, s_layer=metric.s_layer
+    )
     if metric.non_additive is not None:
         semiadditive = "last" if metric.non_additive.latest else "first"
         lines += [
@@ -173,15 +279,17 @@ def _measure(view: str, metric: MetricSpec, place: _Place) -> _Element:
             '        range: "current"',
             f'        semiadditive: "{semiadditive}"',
         ]
-    return _Element("metric", metric.name, metric.expr, shown, tuple(lines))
+    return _Element("metric", metric.name, metric.expr, shown, tuple(lines), metric)
 
 
 def _derived(metric: DerivedMetricSpec) -> _Element:
     shown = "".join(f"MEASURE(`{p.name}`)" if isinstance(p, MetricRef) else p for p in metric.parts)
-    lines = _item(metric.name, shown, label=metric.label, comment=metric.comment)
+    lines = _item(
+        metric.name, shown, label=metric.label, comment=metric.comment, s_layer=metric.s_layer
+    )
     # Only the SQL around the measure references can name a column.
     written = " ".join(p for p in metric.parts if isinstance(p, str))
-    return _Element("metric", metric.name, written, shown, tuple(lines))
+    return _Element("metric", metric.name, written, shown, tuple(lines), metric)
 
 
 def _used_inputs(derived: tuple[DerivedMetricSpec, ...]) -> dict[str, str]:
@@ -272,8 +380,16 @@ def render_databricks(spec: SemanticViewSpec) -> RenderedView:
                 continue
         name = place.prefix + dimension.name
         shown = _column(place, dimension.expr)
-        lines = _item(name, shown, label=dimension.label, comment=dimension.comment)
-        dimensions.append(_Element("dimension", name, dimension.expr, shown, tuple(lines)))
+        lines = _item(
+            name,
+            shown,
+            label=dimension.label,
+            comment=dimension.comment,
+            s_layer=dimension.s_layer,
+        )
+        dimensions.append(
+            _Element("dimension", name, dimension.expr, shown, tuple(lines), dimension)
+        )
 
     # A metric view has no hidden measures: keep a private metric only when a
     # derived metric needs it.
@@ -299,6 +415,8 @@ def render_databricks(spec: SemanticViewSpec) -> RenderedView:
         )
     _check_names(view, dimensions + measures)
     _check_shadowing(view, dimensions + measures)
+    _check_s_layer(dimensions + measures)
+    hooks = [hook for e in dimensions + measures if (hook := _tag_hook(e)) is not None]
 
     lines = [f"version: {SPEC_VERSION}"]
     if spec.comment is not None:
@@ -311,6 +429,6 @@ def render_databricks(spec: SemanticViewSpec) -> RenderedView:
     if measures:
         lines.append("measures:")
         lines += [line for m in measures for line in m.lines]
-    body = f"{CONFIG}\n\n" + "\n".join(lines) + "\n"
+    body = f"{_config(hooks)}\n\n" + "\n".join(lines) + "\n"
     postflight(body, context=f"sem__{view}.sql")
     return RenderedView(body=body, warnings=tuple(sorted(warnings)))

@@ -223,7 +223,7 @@ def _comment(text: str | None) -> str:
     return "" if text is None else f" COMMENT = {escape_jinja(sql_string(text))}"
 
 
-def _member(member: DimensionSpec | MetricSpec | DerivedMetricSpec) -> str:
+def member_name(member: DimensionSpec | MetricSpec | DerivedMetricSpec) -> str:
     """Return how errors name `member`, as `read_s_layer_blocks` does."""
     if isinstance(member, DimensionSpec):
         kind = "entity" if member.entity else "dimension"
@@ -245,13 +245,13 @@ def _check_tag_values(spec: SemanticViewSpec) -> None:
             continue
         if member.label is not None and len(member.label) > MAX_TAG_LENGTH:
             problems.append(
-                f"{_member(member)}: S_LAYER_LABEL (the dbt label) is {len(member.label)} "
+                f"{member_name(member)}: S_LAYER_LABEL (the dbt label) is {len(member.label)} "
                 f"characters, over the {MAX_TAG_LENGTH}-character tag limit"
             )
         try:
             spec_tag_value(member.s_layer)
         except SpecTooLongError as exc:
-            problems.append(f"{_member(member)}: {exc}")
+            problems.append(f"{member_name(member)}: {exc}")
     if problems:
         raise SLayerBlockError("; ".join(problems), problems=tuple(problems))
 

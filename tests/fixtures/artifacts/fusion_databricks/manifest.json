@@ -559,6 +559,15 @@
           "constraints": [],
           "description": "",
           "entity": {
+            "config": {
+              "meta": {
+                "s_layer": {
+                  "value": {
+                    "kind": "identifier"
+                  }
+                }
+              }
+            },
             "name": "order",
             "type": "primary"
           },
@@ -571,6 +580,15 @@
           "constraints": [],
           "description": "",
           "dimension": {
+            "config": {
+              "meta": {
+                "s_layer": {
+                  "value": {
+                    "kind": "date"
+                  }
+                }
+              }
+            },
             "name": "ordered_at",
             "type": "time"
           },
@@ -580,14 +598,34 @@
           "tags": []
         },
         "status": {
-          "config": {},
+          "config": {
+            "meta": {
+              "s_layer": {
+                "synonyms": [
+                  "order status"
+                ],
+                "value": {
+                  "kind": "category"
+                }
+              }
+            }
+          },
           "constraints": [],
           "description": "",
           "dimension": {
             "name": "status",
             "type": "categorical"
           },
-          "meta": {},
+          "meta": {
+            "s_layer": {
+              "synonyms": [
+                "order status"
+              ],
+              "value": {
+                "kind": "category"
+              }
+            }
+          },
           "name": "status",
           "tags": []
         },
@@ -1387,7 +1425,15 @@
           "type_params": null
         },
         {
-          "config": null,
+          "config": {
+            "meta": {
+              "s_layer": {
+                "value": {
+                  "kind": "date"
+                }
+              }
+            }
+          },
           "description": null,
           "expr": "ordered_at",
           "is_partition": false,
@@ -1404,7 +1450,13 @@
       "entities": [
         {
           "config": {
-            "meta": {}
+            "meta": {
+              "s_layer": {
+                "value": {
+                  "kind": "identifier"
+                }
+              }
+            }
           },
           "description": "",
           "expr": "order_id",
@@ -1451,7 +1503,25 @@
           "agg": "sum",
           "agg_params": null,
           "agg_time_dimension": "ordered_at",
-          "config": null,
+          "config": {
+            "meta": {
+              "s_layer": {
+                "display": {
+                  "decimals": {
+                    "max": 0
+                  }
+                },
+                "synonyms": [
+                  "sales",
+                  "turnover"
+                ],
+                "value": {
+                  "currency": "USD",
+                  "kind": "currency"
+                }
+              }
+            }
+          },
           "create_metric": true,
           "description": null,
           "expr": "amount",
@@ -1519,7 +1589,16 @@
           "agg": "sum",
           "agg_params": null,
           "agg_time_dimension": "ordered_at",
-          "config": null,
+          "config": {
+            "meta": {
+              "s_layer": {
+                "value": {
+                  "currency": "USD",
+                  "kind": "currency"
+                }
+              }
+            }
+          },
           "create_metric": true,
           "description": null,
           "expr": null,

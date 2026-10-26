@@ -214,7 +214,7 @@ def test_every_over_long_value_is_reported_once(set_name: str, make_project: Mak
     with pytest.raises(SLayerBlockError) as caught:
         render_semantic_views(load_project(project_dir), adapter="snowflake")
     message = str(caught.value)
-    assert message.startswith("tag values too long for Snowflake (2 problems): ")
+    assert message.startswith("S-LAYER values Snowflake cannot hold (2 problems): ")
     assert message.count("dimension 'status' of semantic model 'orders'") == 1
     assert message.count("metric 'revenue'") == 1
 
