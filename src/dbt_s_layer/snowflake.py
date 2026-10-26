@@ -25,6 +25,9 @@ from dbt_s_layer.semantic_views import DimensionSpec, MetricRef, SqlToken, scan_
 from dbt_s_layer.sentinels import escape_jinja, postflight
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+    from collections.abc import Set as AbstractSet
+
     from s_layer_semantic_formats import SLayerBlock
 
     from dbt_s_layer.semantic_views import (
@@ -371,7 +374,7 @@ def _derived(metric: DerivedMetricSpec) -> str:
 
 def _not_a_column(tokens: list[SqlToken], i: int, calls: list[tuple[str, int]]) -> bool:
     """
-    Whether identifier `tokens[i]` is a type name or a date part rather than a column.
+    Whether identifier `tokens[i]` is a type name, a date part or another non-column word.
 
     `tokens` holds the significant tokens of an expr; `calls` the enclosing open
     parens, innermost last, as (upper-case function name or "", argument index).
@@ -391,6 +394,17 @@ def _not_a_column(tokens: list[SqlToken], i: int, calls: list[tuple[str, int]]) 
         and _not_a_column(tokens, i - 1, calls)
     ):
         return True
+    # A typed literal (`DATE '2024-01-01'`): no column is followed by a string.
+    if text(i + 1).startswith("'"):
+        return True
+    # `INTERVAL 1 DAY`, `x COLLATE nocase`, `ORDER BY x NULLS FIRST`.
+    if text(i - 2) == "INTERVAL" and text(i - 1)[:1].isdigit():
+        return True
+    if text(i - 1) in ("COLLATE", "NULLS"):
+        return True
+    # A named argument: `round(x, digits := 2)`.
+    if text(i + 1) == ":" and text(i + 2) == "=":
+        return True
     if not calls:
         return False
     function, argument = calls[-1]
@@ -403,21 +417,31 @@ def _not_a_column(tokens: list[SqlToken], i: int, calls: list[tuple[str, int]]) 
     return False
 
 
-def column_references(expr: str, table: str) -> set[str]:
-    """
-    Lower-cased names `expr` may resolve against `table`'s own elements.
+def is_significant(token: SqlToken) -> bool:
+    """Whether `token` is neither whitespace nor a comment."""
+    return bool(token.text.strip()) and not token.text.startswith(("--", "/*"))
 
-    Keywords, type names (after `::` or a CAST's `AS`) and date parts (the first
-    argument of `DATE_TRUNC`, `DATEADD`..., `EXTRACT(part FROM ...)`) are not
-    references; a column named like a date part elsewhere in the expr still is.
+
+def column_reference_indexes(
+    tokens: Sequence[SqlToken], table: str, keywords: AbstractSet[str] = _EXPRESSION_KEYWORDS
+) -> list[int]:
     """
-    names: set[str] = set()
-    tokens = [t for t in scan_sql(expr) if t.text.strip() and not t.text.startswith(("--", "/*"))]
+    Indexes into `tokens` (an expr's `scan_sql`) of the names that may be `table`'s columns.
+
+    Keywords (upper case, in `keywords`), type names (after `::` or a CAST's `AS`),
+    date parts (the first argument of `DATE_TRUNC`, `DATEADD`..., `EXTRACT(part FROM
+    ...)`, an `INTERVAL`'s unit), typed literals, collations and named arguments are
+    not references; a column named like a date part elsewhere in the expr still is.
+    A name qualified with another table is not one of `table`'s.
+    """
+    indexes: list[int] = []
+    positions = [j for j, t in enumerate(tokens) if is_significant(t)]
+    significant = [tokens[j] for j in positions]
     calls: list[tuple[str, int]] = []
     previous: str | None = None
-    for i, token in enumerate(tokens):
+    for i, token in enumerate(significant):
         if token.text == "(":
-            before = tokens[i - 1] if i > 0 else None
+            before = significant[i - 1] if i > 0 else None
             name = before.text.upper() if before is not None and before.call else ""
             calls.append((name, 0))
             continue
@@ -434,12 +458,18 @@ def column_references(expr: str, table: str) -> set[str]:
         if (
             same_table
             and not token.call
-            and token.text.upper() not in _EXPRESSION_KEYWORDS
-            and not _not_a_column(tokens, i, calls)
+            and token.text.upper() not in keywords
+            and not _not_a_column(significant, i, calls)
         ):
-            names.add(token.text.lower())
+            indexes.append(positions[i])
         previous = token.text
-    return names
+    return indexes
+
+
+def column_references(expr: str, table: str) -> set[str]:
+    """Lower-cased names `expr` may resolve against `table`'s own elements."""
+    tokens = scan_sql(expr)
+    return {tokens[i].text.lower() for i in column_reference_indexes(tokens, table)}
 
 
 def _is_column(expr: str, name: str, table: str) -> bool:

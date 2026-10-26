@@ -187,6 +187,18 @@ def _check_project(project_dir: Path) -> int:
                 "fails on the generated sem__ models. Install dbt-databricks >= 1.12.0.",
                 file=sys.stdout,
             )
+    if manifest.metadata.adapter_type == "duckdb":
+        from dbt_s_layer import duckdb_views
+
+        if duckdb_views.MATERIALIZATION_MACRO in manifest.macros:
+            print(f"OK  {duckdb_views.PACKAGE}: installed", file=sys.stdout)
+        else:
+            print(
+                f"WARN {duckdb_views.PACKAGE}: not installed, so `dbt run` fails on the "
+                f"generated sem__ models. Add {duckdb_views.REPOSITORY} to packages.yml and run "
+                "`dbt deps`.",
+                file=sys.stdout,
+            )
     return 0
 
 

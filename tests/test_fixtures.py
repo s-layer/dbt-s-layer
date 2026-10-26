@@ -36,9 +36,15 @@ DATABRICKS_SETS = {
     "fusion_databricks": "Fusion 2.",
     "core_databricks": "dbt Core 1.",
 }
-SETS = {**BASE_SETS, **EXPORT_SETS, **SNOWFLAKE_SETS, **DATABRICKS_SETS}
+# Sets parsed on a DuckDB target with duckdb_semantic_views installed (Phase 7).
+DUCKDB_SETS = {
+    "fusion_duckdb": "Fusion 2.",
+    "core_duckdb": "dbt Core 1.",
+}
+SETS = {**BASE_SETS, **EXPORT_SETS, **SNOWFLAKE_SETS, **DATABRICKS_SETS, **DUCKDB_SETS}
 SEMANTIC_VIEW_MACRO = "macro.dbt_semantic_view.materialization_semantic_view_snowflake"
 METRIC_VIEW_MACRO = "macro.dbt_databricks.materialization_metric_view_databricks"
+DUCKDB_VIEW_MACRO = "macro.duckdb_semantic_views.materialization_semantic_view_duckdb"
 EXPORT_SAVED_QUERIES = {
     "cumulative_revenue",
     "items_by_country",
@@ -89,13 +95,19 @@ def test_manifest_is_trimmed(set_name: str) -> None:
     manifest = _load(set_name, "manifest.json")
     assert set(manifest) - {"macros"} == {"metadata", "nodes", "saved_queries", "semantic_models"}
     # Only the semantic and metric view materializations, by id, and only where installed.
-    assert ("macros" in manifest) == (set_name in SNOWFLAKE_SETS or set_name in DATABRICKS_SETS)
-    package = "dbt_databricks" if set_name in DATABRICKS_SETS else "dbt_semantic_view"
+    assert ("macros" in manifest) == (
+        set_name in SNOWFLAKE_SETS or set_name in DATABRICKS_SETS or set_name in DUCKDB_SETS
+    )
     for macro_id, macro in manifest.get("macros", {}).items():
         if set_name in DATABRICKS_SETS:
             assert macro_id == METRIC_VIEW_MACRO
+            package = "dbt_databricks"
+        elif set_name in DUCKDB_SETS:
+            assert macro_id == DUCKDB_VIEW_MACRO
+            package = "duckdb_semantic_views"
         else:
             assert macro_id.startswith("macro.dbt_semantic_view.materialization_")
+            package = "dbt_semantic_view"
         assert macro == {"unique_id": macro_id, "package_name": package}
     assert set(manifest["metadata"]) <= {
         "adapter_type",
@@ -218,6 +230,22 @@ def test_databricks_sets_have_the_metric_view_materialization(set_name: str) -> 
     assert METRIC_VIEW_MACRO in manifest["macros"]
 
 
+@pytest.mark.parametrize("set_name", DUCKDB_SETS)
+def test_duckdb_sets_have_the_semantic_view_package(set_name: str) -> None:
+    manifest = _load(set_name, "manifest.json")
+    assert manifest["metadata"]["adapter_type"] == "duckdb"
+    assert DUCKDB_VIEW_MACRO in manifest["macros"]
+
+
+@pytest.mark.parametrize("set_name", DUCKDB_SETS)
+def test_duckdb_sets_have_expression_members(set_name: str) -> None:
+    semantic = _load(set_name, "semantic_manifest.json")
+    orders = next(sm for sm in semantic["semantic_models"] if sm["name"] == "orders")
+    month = next(d for d in orders["dimensions"] if d["name"] == "order_month")
+    assert month["expr"] == "date_trunc('month', ordered_at)"
+    assert "paid_revenue" in _names(semantic["metrics"])
+
+
 def test_core_databricks_has_an_approximate_discrete_percentile() -> None:
     semantic = _load("core_databricks", "semantic_manifest.json")
     orders = next(sm for sm in semantic["semantic_models"] if sm["name"] == "orders")
@@ -227,7 +255,7 @@ def test_core_databricks_has_an_approximate_discrete_percentile() -> None:
     assert params["use_discrete_percentile"] is True
 
 
-@pytest.mark.parametrize("set_name", [*SNOWFLAKE_SETS, *DATABRICKS_SETS])
+@pytest.mark.parametrize("set_name", [*SNOWFLAKE_SETS, *DATABRICKS_SETS, *DUCKDB_SETS])
 def test_snowflake_sets_cover_the_metric_mapping(set_name: str) -> None:
     semantic = _load(set_name, "semantic_manifest.json")
     assert _names(semantic["semantic_models"]) == {"customers", "order_items", "orders", "stores"}

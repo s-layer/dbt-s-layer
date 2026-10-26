@@ -29,15 +29,19 @@ EXPORT_FILES = [
     "exp__revenue_by_day__exp_revenue_by_day_view.sql",
     "exp__revenue_by_region_country__exp_region_country.sql",
 ]
-ALL_FILES = sorted([SCHEMA_FILE, *EXPORT_FILES])
 SEM_FILES = [
     "sem__customers.sql",
     "sem__order_items.sql",
     "sem__orders.sql",
     "sem__stores.sql",
 ]
-UNSUPPORTED_DUCKDB = (
-    "WARN semantic views: not generated for adapter 'duckdb' yet; only exports were generated."
+# core_export is a DuckDB parse, so it gets DuckDB semantic views.
+ALL_FILES = sorted([SCHEMA_FILE, *EXPORT_FILES, *SEM_FILES])
+NO_DUCKDB_PACKAGE = (
+    "WARN semantic views: the duckdb_semantic_views package is not installed (manifest.json "
+    "has no macro.duckdb_semantic_views.materialization_semantic_view_duckdb). Add "
+    "s-layer/dbt-duckdb-semantic-views to packages.yml and run `dbt deps`; until then "
+    "`dbt run` fails on the sem__ models."
 )
 
 
@@ -85,7 +89,7 @@ def test_generate_writes_to_models_semantic(project_dir: Path) -> None:
     assert _listing(out) == ALL_FILES
     expected = render_output(load_project(project_dir))
     assert {name: (out / name).read_text() for name in ALL_FILES} == expected
-    assert "6 files" in result.output
+    assert "10 files" in result.output
     assert str(out) in result.output
 
 
@@ -108,10 +112,8 @@ def test_relative_output_dir_is_relative_to_the_project(
     assert result.exit_code == 0, result.output
     assert _listing(project_dir / "models" / "gen") == ALL_FILES
     assert _listing(elsewhere) == []
-    # No model-paths warning; DuckDB has no semantic views yet (Phase 7), which is the one WARN.
-    assert [line for line in result.output.splitlines() if line.startswith("WARN")] == [
-        UNSUPPORTED_DUCKDB
-    ]
+    # models/gen is under model-paths, so no warning says otherwise.
+    assert "model-paths" not in result.output
 
 
 def test_absolute_output_dir(project_dir: Path) -> None:
@@ -335,14 +337,14 @@ def test_check_on_stale_artifacts(project_dir: Path) -> None:
 def test_generate_prints_render_warnings(project_dir: Path) -> None:
     result = _invoke("generate", "--project-dir", project_dir)
     assert result.exit_code == 0, result.output
-    assert UNSUPPORTED_DUCKDB in result.output.splitlines()
+    assert NO_DUCKDB_PACKAGE in result.output.splitlines()
 
 
 def test_generate_semantic_views_for_snowflake(project_dir: Path) -> None:
     result = _invoke("generate", "--project-dir", project_dir, "--adapter", "snowflake")
     assert result.exit_code == 0, result.output
     out = project_dir / "models" / "semantic"
-    assert _listing(out) == sorted([*ALL_FILES, *SEM_FILES])
+    assert _listing(out) == ALL_FILES
     assert "10 files" in result.output
     lines = result.output.splitlines()
     assert any(
@@ -385,4 +387,4 @@ def test_check_after_switching_to_snowflake(project_dir: Path) -> None:
     result = _invoke("check", "--project-dir", project_dir, "--adapter", "snowflake")
     assert result.exit_code == 1
     for name in SEM_FILES:
-        assert f"missing: {name}" in result.output
+        assert f"changed: {name}" in result.output

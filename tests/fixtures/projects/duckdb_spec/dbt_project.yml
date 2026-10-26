@@ -1,0 +1,8 @@
+name: fx
+version: "1.0.0"
+profile: fx
+model-paths: ["models"]
+# Loads the semantic_views extension on every engine (Fusion has no `extensions:` profile key).
+on-run-start:
+  - "INSTALL semantic_views FROM community"
+  - "LOAD semantic_views"

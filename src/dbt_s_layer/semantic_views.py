@@ -3,8 +3,8 @@ Describe one semantic view per semantic model, independent of any warehouse (SEM
 
 A view holds its root semantic model plus the semantic models metricflow could
 join to it (its join closure), with the root's metrics. Adapters render a
-`SemanticViewSpec` into their own DDL: Snowflake in `snowflake.py`, Databricks
-and DuckDB in later phases. Features a semantic view cannot express are left
+`SemanticViewSpec` into their own DDL: Snowflake in `snowflake.py`, Databricks in
+`databricks.py`, DuckDB in `duckdb_views.py`. Features a semantic view cannot express are left
 out with one warning each, never an error, so a project that uses them still
 generates.
 """
@@ -727,7 +727,7 @@ def render_semantic_views(project: SemanticProject, *, adapter: str) -> Semantic
     A semantic model whose view cannot be built (`SemanticViewError`) is left out
     with a warning naming the view and the reason; the other views still render.
     """
-    from dbt_s_layer import databricks, snowflake
+    from dbt_s_layer import databricks, duckdb_views, snowflake
 
     if not project.semantic_manifest.semantic_models:
         return SemanticViewResult(models=(), warnings=())
@@ -738,6 +738,7 @@ def render_semantic_views(project: SemanticProject, *, adapter: str) -> Semantic
     renderers: dict[str, Callable[[SemanticViewSpec], RenderedView]] = {
         "snowflake": render_snowflake,
         "databricks": databricks.render_databricks,
+        "duckdb": duckdb_views.render_duckdb,
     }
     comment_prefix = "#" if adapter == "databricks" else "--"
     render = renderers.get(adapter)
@@ -816,5 +817,14 @@ def render_semantic_views(project: SemanticProject, *, adapter: str) -> Semantic
             "semantic views: dbt-databricks has no metric_view materialization (manifest.json "
             f"has no {databricks.MATERIALIZATION_MACRO}). Install dbt-databricks >= 1.12.0; "
             "until then `dbt run` fails on the sem__ models."
+        )
+    if (
+        adapter == "duckdb"
+        and duckdb_views.MATERIALIZATION_MACRO not in project.dbt_manifest.macros
+    ):
+        warnings.add(
+            f"semantic views: the {duckdb_views.PACKAGE} package is not installed (manifest.json "
+            f"has no {duckdb_views.MATERIALIZATION_MACRO}). Add {duckdb_views.REPOSITORY} to "
+            "packages.yml and run `dbt deps`; until then `dbt run` fails on the sem__ models."
         )
     return SemanticViewResult(models=tuple(models), warnings=tuple(sorted(warnings)))

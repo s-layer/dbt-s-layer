@@ -23,6 +23,8 @@ SET_PROJECTS = {
     "core_snowflake": "snowflake_legacy",
     "fusion_databricks": "databricks_spec",
     "core_databricks": "databricks_legacy",
+    "fusion_duckdb": "duckdb_spec",
+    "core_duckdb": "duckdb_legacy",
 }
 # Sets the Phase 1 loader tests run over.
 ARTIFACT_SETS = ("fusion_new", "core_new", "core_legacy")
@@ -32,6 +34,8 @@ EXPORT_SETS = ("fusion_export", "core_export")
 SNOWFLAKE_SETS = ("fusion_snowflake", "core_snowflake")
 # Sets parsed on a Databricks target with dbt-databricks' metric_view materialization.
 DATABRICKS_SETS = ("fusion_databricks", "core_databricks")
+# Sets parsed on a DuckDB target with the duckdb_semantic_views package installed.
+DUCKDB_SETS = ("fusion_duckdb", "core_duckdb")
 
 MakeProject = Callable[[str], Path]
 

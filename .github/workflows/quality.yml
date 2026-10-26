@@ -37,7 +37,20 @@ jobs:
         run: prek run --all-files
 
       - name: Tests
+        # The DuckDB execution tests may not skip for want of the semantic_views extension.
+        env:
+          DBT_S_LAYER_DUCKDB_EXTENSION: required
         run: uv run pytest
+
+      # The lockfile's duckdb loads extension 0.16; these load 0.13 (the floor for dbt Core)
+      # and 0.11 (the one dbt Fusion's embedded DuckDB 1.5.4 gets).
+      - name: Generated DuckDB views on older extensions
+        if: matrix.python-version == '3.12'
+        env:
+          DBT_S_LAYER_DUCKDB_EXTENSION: required
+        run: |
+          uv run --with duckdb==1.5.6 pytest tests/test_duckdb_execute.py
+          uv run --with duckdb==1.5.4 pytest tests/test_duckdb_execute.py
 
       - name: Cache pruning
         if: always()

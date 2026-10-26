@@ -13,16 +13,19 @@ Each artifact set is produced by a real `dbt parse` of a fixture project:
     fusion_databricks tests/fixtures/projects/databricks_spec dbt Fusion, databricks target
     core_databricks  tests/fixtures/projects/databricks_legacy dbt Core with dbt-databricks,
                      databricks target
+    fusion_duckdb    tests/fixtures/projects/duckdb_spec   dbt Fusion, duckdb target
+    core_duckdb      tests/fixtures/projects/duckdb_legacy dbt Core,   duckdb target
 
-Projects with a `packages.yml` get `dbt deps` first (the snowflake_* projects download the
-dbt_semantic_view package from GitHub). The dbt Core used must have the duckdb and
-snowflake adapters.
+Projects with a `packages.yml` get `dbt deps` first (the snowflake_* and duckdb_* projects
+download the dbt_semantic_view and duckdb_semantic_views packages from GitHub). The dbt
+Core used must have the duckdb and snowflake adapters.
 
 `manifest.json` is trimmed to what dbt-s-layer reads (metadata, model, seed and
 snapshot nodes, semantic models and saved queries, and the ids of the
-dbt_semantic_view materializations when that package is installed, and of
-dbt-databricks' metric_view materialization), and every machine- or run-specific value
-is dropped, so that regenerating with the same engine versions produces no diff.
+dbt_semantic_view and duckdb_semantic_views materializations when those packages are
+installed, and of dbt-databricks' metric_view materialization), and every machine- or
+run-specific value is dropped, so that regenerating with the same engine versions produces
+no diff.
 
 dbt-databricks 1.12.7 needs dbt-core < 1.12.6, so the Databricks set takes its own dbt
 Core (`--core-databricks`, defaulting to `--core`).
@@ -71,16 +74,20 @@ SETS: list[tuple[str, str, EngineKey, str]] = [
     ("core_snowflake", "snowflake_legacy", "dbt Core", "snowflake"),
     ("fusion_databricks", "databricks_spec", "Fusion", "databricks"),
     ("core_databricks", "databricks_legacy", "dbt Core (Databricks)", "databricks"),
+    ("fusion_duckdb", "duckdb_spec", "Fusion", "duckdb"),
+    ("core_duckdb", "duckdb_legacy", "dbt Core", "duckdb"),
 ]
 
 # Only these metadata keys are stable across machines and runs.
 _METADATA_KEYS = ("adapter_type", "dbt_schema_version", "dbt_version", "project_name", "quoting")
 # Node types a semantic model can read from.
 _RELATION_NODE_TYPES = ("model", "seed", "snapshot")
-# Macros kept (ids only): they tell dbt-s-layer whether dbt_semantic_view is installed,
-# and whether dbt-databricks has the metric_view materialization.
+# Macros kept (ids only): they tell dbt-s-layer whether dbt_semantic_view or
+# duckdb_semantic_views is installed, and whether dbt-databricks has the metric_view
+# materialization.
 _KEPT_MACRO_PREFIXES = (
     "macro.dbt_semantic_view.materialization_",
+    "macro.duckdb_semantic_views.materialization_",
     "macro.dbt_databricks.materialization_metric_view_",
 )
 # Node keys that vary per run or per machine.
