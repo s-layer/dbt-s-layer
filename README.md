@@ -186,13 +186,15 @@ orders.revenue AS SUM(amount) WITH SYNONYMS = ('sales', 'turnover')
             S_LAYER.DBT.S_LAYER_SPEC = '{"value":{"currency":"USD"}}')
 ```
 
-Members without a block get no tags, so a project with no blocks needs nothing below. A
-`S_LAYER_SPEC` longer than Snowflake's 256-character tag limit stops `generate` with an error.
+Members without a block get no tags, so a project with no blocks needs nothing below. An
+`S_LAYER_LABEL` or `S_LAYER_SPEC` longer than Snowflake's 256-character tag limit is never
+truncated: `generate` stops with an error naming every such member.
 
 The tag objects must exist before the views are built. They live in
 `<target database>.<target schema>` unless you set the `s_layer_tag_schema` var to another
 `<database>.<schema>`. Create them with these `on-run-start` hooks in `dbt_project.yml`
-(`generate` warns when they are missing):
+(`generate` warns when a tag name is missing from them; if you create the tags some other way,
+such as with a macro, it keeps warning):
 
 ```yaml
 on-run-start:

@@ -62,3 +62,8 @@ class SemanticViewError(DbtSLayerError):
 
 class SLayerBlockError(DbtSLayerError):
     """A `config.meta.s_layer` block is not valid S-LAYER vocabulary for its member."""
+
+    def __init__(self, message: str, problems: tuple[str, ...] = ()) -> None:
+        super().__init__(message)
+        # One entry per problem, each naming its member.
+        self.problems = problems or (message,)

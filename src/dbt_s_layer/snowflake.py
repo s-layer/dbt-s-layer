@@ -13,10 +13,15 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from s_layer_semantic_formats import SpecTooLongError, spec_tag_value
+from s_layer_semantic_formats import (
+    MAX_TAG_LENGTH,
+    SpecTooLongError,
+    spec_tag_value,
+    to_compact_json,
+)
 
 from dbt_s_layer.errors import SemanticViewError, SLayerBlockError
-from dbt_s_layer.semantic_views import MetricRef, SqlToken, scan_sql
+from dbt_s_layer.semantic_views import DimensionSpec, MetricRef, SqlToken, scan_sql
 from dbt_s_layer.sentinels import escape_jinja, postflight
 
 if TYPE_CHECKING:
@@ -24,7 +29,6 @@ if TYPE_CHECKING:
 
     from dbt_s_layer.semantic_views import (
         DerivedMetricSpec,
-        DimensionSpec,
         MetricSpec,
         SemanticViewSpec,
         TableSpec,
@@ -37,12 +41,10 @@ CONFIG = "{{ config(materialized='semantic_view', static_analysis='off') }}"
 # Where the S_LAYER_* tag objects live: a Jinja expression for '<database>.<schema>'.
 TAG_SCHEMA = "var('s_layer_tag_schema', target.database ~ '.' ~ target.schema)"
 # dbt_project.yml `on-run-start` entries that create the tag objects (README: "Snowflake tags").
+TAG_NAMES = ("S_LAYER_KIND", "S_LAYER_LABEL", "S_LAYER_SPEC")
 TAG_HOOKS = (
     f'"create schema if not exists {{{{ {TAG_SCHEMA} }}}}"',
-    *(
-        f'"create tag if not exists {{{{ {TAG_SCHEMA} }}}}.{name}"'
-        for name in ("S_LAYER_KIND", "S_LAYER_LABEL", "S_LAYER_SPEC")
-    ),
+    *(f'"create tag if not exists {{{{ {TAG_SCHEMA} }}}}.{name}"' for name in TAG_NAMES),
 )
 
 # https://docs.snowflake.com/en/sql-reference/reserved-keywords (fetched 2026-10-19).
@@ -221,7 +223,40 @@ def _comment(text: str | None) -> str:
     return "" if text is None else f" COMMENT = {escape_jinja(sql_string(text))}"
 
 
-def _s_layer(member: str, block: SLayerBlock | None, label: str | None) -> str:
+def _member(member: DimensionSpec | MetricSpec | DerivedMetricSpec) -> str:
+    """Return how errors name `member`, as `read_s_layer_blocks` does."""
+    if isinstance(member, DimensionSpec):
+        kind = "entity" if member.entity else "dimension"
+        return f"{kind} {member.name!r} of semantic model {member.table!r}"
+    return f"metric {member.name!r}"
+
+
+def _check_tag_values(spec: SemanticViewSpec) -> None:
+    """
+    Raise `SLayerBlockError` naming every tag value over Snowflake's limit.
+
+    S_LAYER_KIND is a vocabulary word and always fits; the label and the spec
+    are never truncated, so a member whose label or spec is too long stops
+    `generate` here rather than `dbt run` later.
+    """
+    problems: list[str] = []
+    for member in (*spec.dimensions, *spec.metrics, *spec.derived_metrics):
+        if member.s_layer is None:
+            continue
+        if member.label is not None and len(member.label) > MAX_TAG_LENGTH:
+            problems.append(
+                f"{_member(member)}: S_LAYER_LABEL (the dbt label) is {len(member.label)} "
+                f"characters, over the {MAX_TAG_LENGTH}-character tag limit"
+            )
+        try:
+            spec_tag_value(member.s_layer)
+        except SpecTooLongError as exc:
+            problems.append(f"{_member(member)}: {exc}")
+    if problems:
+        raise SLayerBlockError("; ".join(problems), problems=tuple(problems))
+
+
+def _s_layer(block: SLayerBlock | None, label: str | None) -> str:
     """
     Return a member's S-LAYER slots: `WITH SYNONYMS`, then `WITH TAG`.
 
@@ -239,10 +274,7 @@ def _s_layer(member: str, block: SLayerBlock | None, label: str | None) -> str:
     tags = [("S_LAYER_KIND", block.kind)]
     if label is not None:
         tags.append(("S_LAYER_LABEL", label))
-    try:
-        spec = spec_tag_value(block)
-    except SpecTooLongError as exc:
-        raise SLayerBlockError(f"{member}: {exc}") from None
+    spec = to_compact_json(block)
     if spec != "{}":
         tags.append(("S_LAYER_SPEC", spec))
     values = ", ".join(
@@ -286,8 +318,7 @@ def _table(table: TableSpec) -> str:
 
 def _dimension(dimension: DimensionSpec) -> str:
     name = _qualified(dimension.table, dimension.name)
-    member = f"dimension {dimension.name!r} of semantic model {dimension.table!r}"
-    slots = _s_layer(member, dimension.s_layer, dimension.label)
+    slots = _s_layer(dimension.s_layer, dimension.label)
     return f"  {name} AS {_expr(dimension.expr)}{slots}{_comment(dimension.comment)}"
 
 
@@ -322,7 +353,7 @@ def _metric(view: str, metric: MetricSpec) -> str:
         non_additive = f" NON ADDITIVE BY ({dimension} {order})"
     name = _qualified(metric.table, metric.name)
     aggregate = _aggregate(view, metric)
-    slots = _s_layer(f"metric {metric.name!r}", metric.s_layer, metric.label)
+    slots = _s_layer(metric.s_layer, metric.label)
     return f"  {private}{name}{non_additive} AS {aggregate}{slots}{_comment(metric.comment)}"
 
 
@@ -331,7 +362,7 @@ def _derived(metric: DerivedMetricSpec) -> str:
         _qualified(p.table, p.name) if isinstance(p, MetricRef) else _expr(p) for p in metric.parts
     )
     private = "PRIVATE " if metric.private else ""
-    slots = _s_layer(f"metric {metric.name!r}", metric.s_layer, metric.label)
+    slots = _s_layer(metric.s_layer, metric.label)
     return f"  {private}{quote_identifier(metric.name)} AS {expr}{slots}{_comment(metric.comment)}"
 
 
@@ -464,6 +495,7 @@ def render_snowflake(spec: SemanticViewSpec) -> str:
             f"sem__{spec.name}: a semantic view needs at least one dimension or metric."
         )
     check_name_shadowing(spec)
+    _check_tag_values(spec)
     parts = [_clause("TABLES", [_table(t) for t in spec.tables])]
     if spec.relationships:
         parts.append(
