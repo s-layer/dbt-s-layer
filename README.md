@@ -233,6 +233,36 @@ and `doctor` warn. The generated models have been built on a Databricks SQL ware
 dbt Core 1.12.5 + dbt-databricks 1.12.7 and with Fusion 2.0.8, and every measure matched plain
 SQL over the same tables.
 
+## Describing what a field means (`s_layer`)
+
+A metric, dimension or entity can say what its values mean in an `s_layer` block under
+`config.meta`: a currency in USD, a fraction to show as a percentage, a duration in seconds.
+The vocabulary is defined by
+[s-layer-semantic-formats](https://github.com/s-layer/semantic-formats), which lists every
+kind and key.
+
+```yaml
+metrics:
+  - name: revenue
+    label: Revenue
+    config:
+      meta:
+        s_layer:
+          value: {kind: currency, currency: USD}
+          display: {decimals: {max: 0}}
+          synonyms: [sales, turnover]
+```
+
+`generate` and `check` validate every block and stop with an error naming each bad one, so
+nothing reaches the warehouse. Beyond the vocabulary's own rules:
+
+- Set the label with dbt's `label:`, not in the block.
+- A time dimension needs kind `date` or `datetime`. Its `time.grain` comes from the
+  dimension's `time_granularity`; a different grain in the block is an error.
+- A metric with a `non_additive_dimension` already says how it adds up, so its block leaves
+  `aggregation` out.
+- Measures' meta is not read (Fusion copies a metric's meta onto the measure it generates).
+
 ## What is left out of semantic and metric views
 
 Each of these is skipped with one warning naming it; the rest of the view is still generated.
