@@ -208,7 +208,29 @@ def test_every_limit_is_checked_and_reported_together() -> None:
     assert len(problems) == 3
     assert any(p.startswith("dimension 'status' of semantic model 'orders'") for p in problems)
     assert any(p.startswith("metric 'revenue'") and "11 synonyms" in p for p in problems)
-    assert any(p.startswith("entity 'order' of semantic model 'orders'") for p in problems)
+    assert any(
+        p.startswith("entity 'order' of semantic model 'orders'")
+        and "is 256 characters, over the Databricks limit of 255" in p
+        for p in problems
+    )
+
+
+def test_limits_are_inclusive() -> None:
+    """Ten synonyms of 255 characters and a 256-character spec fit."""
+    synonyms = [f"{i}" + "x" * 254 for i in range(10)]
+    revenue = replace(REVENUE, s_layer=_block({"value": {"kind": "count"}, "synonyms": synonyms}))
+
+    def block(note: str) -> Any:
+        raw = {"value": {"kind": "category"}, "x-acme": {"note": note}}
+        return _block(raw, "dimension")
+
+    note = "x" * (256 - len(to_compact_json(block(""))))
+    status = replace(STATUS, s_layer=block(note))
+    assert len(to_compact_json(block(note))) == 256
+    body = render_databricks(_view(dimensions=(status,), metrics=(revenue,))).body
+    _, definition = _render(body)
+    assert _field(definition, "measures", "revenue")["synonyms"] == synonyms
+    assert "synonyms" not in _field(definition, "dimensions", "status")
 
 
 @pytest.mark.parametrize("set_name", DATABRICKS_SETS)
@@ -222,6 +244,6 @@ def test_long_values_stop_generate_once_each(set_name: str, make_project: MakePr
     path.write_text(json.dumps(raw))
     with pytest.raises(SLayerBlockError) as caught:
         render_semantic_views(load_project(project_dir), adapter="databricks")
-    assert str(caught.value).startswith("tag values too long for Databricks (1 problem): ")
+    assert str(caught.value).startswith("S-LAYER values Databricks cannot hold (1 problem): ")
     assert caught.value.problems == (caught.value.problems[0],)
     assert caught.value.problems[0].startswith("metric 'revenue': ")

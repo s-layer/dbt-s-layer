@@ -19,7 +19,6 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from s_layer_semantic_formats import (
-    MAX_TAG_LENGTH,
     SpecTooLongError,
     spec_tag_value,
     to_compact_json,
@@ -51,6 +50,8 @@ TAG_NAMES = ("S_LAYER_KIND", "S_LAYER_SPEC")
 # https://docs.databricks.com/aws/en/metric-views/data-modeling/semantic-metadata
 MAX_SYNONYMS = 10
 MAX_SYNONYM_LENGTH = 255
+# https://docs.databricks.com/aws/en/database-objects/tags
+MAX_TAG_VALUE_LENGTH = 256
 # Comments and display names need spec 1.1, as do nested joins (DBR 17.3+).
 SPEC_VERSION = "1.1"
 # The name a metric view gives its root table.
@@ -171,7 +172,7 @@ def _check_s_layer(elements: list[_Element]) -> None:
             if len(synonym) > MAX_SYNONYM_LENGTH
         ]
         try:
-            spec_tag_value(member.s_layer, MAX_TAG_LENGTH)
+            spec_tag_value(member.s_layer, MAX_TAG_VALUE_LENGTH)
         except SpecTooLongError as exc:
             problems.append(f"{where}: {exc}")
     if problems:
