@@ -381,17 +381,22 @@ DuckDB stores tag names as written, so there are no tag objects to create and no
 Snowflake, and `generate` stops with an error naming every member over it.
 
 Tags need extension 0.17 or later. An older extension does not reject the clause: it keeps it
-as part of the member's expression, and the member then fails when it is queried. So on an
-older extension, including the one dbt Fusion's DuckDB 1.5.4 loads, turn the tags off with a
-var in `dbt_project.yml` (synonyms and comments stay):
+as part of the member's expression, and the member then fails when it is queried. So each model
+asks DuckDB which extension version is loaded when dbt runs it, and writes the tags only on 0.17
+or later. On an older extension you get the synonyms and comments without the tags. `dbt parse`
+runs no query and leaves the tags out.
+
+To decide yourself, set the `s_layer_duckdb_tags` var in `dbt_project.yml`. Set it to `true`
+to keep the tags on a local build of the extension, whose version is a commit hash. Set it to
+`false` to never write them:
 
 ```yaml
 vars:
-  s_layer_duckdb_tags: false
+  s_layer_duckdb_tags: true
 ```
 
-The generated models read the var when dbt compiles them, so changing it needs no
-`generate`.
+The tag values are checked against the 256-character limit whether or not they end up written.
+A member that is left out of the view (see the differences above) is not checked.
 
 ### Install the package and the extension
 
@@ -420,9 +425,9 @@ does the same. Which extension version you get depends on your DuckDB:
 
 | DuckDB | Extension | Notes |
 | ------ | --------- | ----- |
-| 2.0 | 0.16 or 0.17 | Member tags need 0.17; set `s_layer_duckdb_tags: false` on 0.16. `SUM` over integers returns `HUGEINT` (`BIGINT` before 0.15). |
-| 1.5.6 | 0.13 | The oldest supported with dbt Core. Set `s_layer_duckdb_tags: false`. |
-| 1.5.4 (inside dbt Fusion 2.0.8 and 2.0.9) | 0.11 | Best effort. Set `s_layer_duckdb_tags: false`. Creates every view in the default schema, ignoring `+schema`, so keep `sem__` names unique per database. |
+| 2.0 | 0.16 or 0.17 | Member tags need 0.17. `SUM` over integers returns `HUGEINT` (`BIGINT` before 0.15). |
+| 1.5.6 | 0.13 | The oldest supported with dbt Core. No member tags. |
+| 1.5.4 (inside dbt Fusion 2.0.8 and 2.0.9) | 0.11 | Best effort. No member tags. Creates every view in the default schema, ignoring `+schema`, so keep `sem__` names unique per database. |
 
 Query a view with `semantic_view('sem__orders', dimensions := [...], metrics := [...])`, or, from
 0.16, `SEMANTIC_VIEW(sem__orders DIMENSIONS ... METRICS ...)`. A metric with a non-additive

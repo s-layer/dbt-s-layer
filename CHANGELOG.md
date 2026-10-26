@@ -37,8 +37,8 @@ All notable changes to this project are documented here. The format follows
   loads), one per semantic model. Every column an expression
   reads is qualified with its table, so a column two joined tables share stays unambiguous.
   Members with an `s_layer` block get its synonyms as `WITH SYNONYMS` and, on extension 0.17
-  or later, the tags `S_LAYER_KIND`, `S_LAYER_LABEL` and `S_LAYER_SPEC`. The
-  `s_layer_duckdb_tags` var turns the tags off for older extensions.
+  or later, the tags `S_LAYER_KIND`, `S_LAYER_LABEL` and `S_LAYER_SPEC`. Each model checks
+  the loaded extension's version when it runs; the `s_layer_duckdb_tags` var overrides that.
 
 ### Known limitations
 

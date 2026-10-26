@@ -1,5 +1,10 @@
 {{ config(materialized='semantic_view', static_analysis='off') }}
-{%- set s_layer_tags = var('s_layer_duckdb_tags', true) %}
+{%- set s_layer_tags = var('s_layer_duckdb_tags', none) %}
+{%- if s_layer_tags is none %}
+{%- set s_layer_tags = execute and run_query(
+    "select count(*) from duckdb_extensions() where extension_name = 'semantic_views' and loaded and regexp_matches(extension_version, '^v(0[.](1[7-9]|[2-9][0-9])|[1-9][0-9]*)[.]')"
+).columns[0].values()[0] > 0 %}
+{%- endif %}
 
 TABLES (
   order_items AS {{ ref('order_items') }}

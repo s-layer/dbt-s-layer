@@ -8,10 +8,10 @@ duckdb_semantic_views materialization, from GitHub), and runs `dbt parse`,
 into a DuckDB file. The project's on-run-start hooks install and load the
 semantic_views extension, and a data test added after `generate` queries a view.
 
-Members with an `s_layer` block get `WITH TAG`, which needs extension 0.17; dbt
-Fusion's DuckDB 1.5.4 gets 0.11. So the build sets `s_layer_duckdb_tags` to false,
-except on dbt Core with DBT_S_LAYER_DUCKDB_TAGS=required, where it also checks the
-tags of `revenue` through DESCRIBE.
+Members with an `s_layer` block get `WITH TAG` when the loaded extension is 0.17 or
+later (`s_layer_duckdb_tags` is left unset, so the models decide); dbt Fusion's
+DuckDB 1.5.4 gets 0.11. With DBT_S_LAYER_DUCKDB_TAGS=required, dbt Core's build also
+checks the tags of `revenue` through DESCRIBE.
 
 Engines come from `DBT_S_LAYER_FUSION` / `DBT_S_LAYER_CORE` (paths), else from
 PATH (`dbtf` or a Fusion `dbt`; a dbt Core `dbt` with the duckdb adapter). Each
@@ -94,13 +94,12 @@ def test_generated_semantic_views_build(kind: str, project: str, tmp_path: Path)
     tags = kind == "dbt Core" and os.environ.get("DBT_S_LAYER_DUCKDB_TAGS") == "required"
     if tags:
         (tests_dir / "sem_orders_tags.sql").write_text(TAGS_TEST)
-    variables = ["--vars", json.dumps({"s_layer_duckdb_tags": tags})]
 
     ok(run(binary, "parse", cwd=project_dir))
     result = runner.invoke(app, ["check", "--project-dir", str(project_dir)])
     assert result.exit_code == 0, result.output
 
-    built = run(binary, "build", *variables, cwd=project_dir)
+    built = run(binary, "build", cwd=project_dir)
     ok(built)
     assert "sem_orders_answers" in built.stdout
     assert ("sem_orders_tags" in built.stdout) == tags
