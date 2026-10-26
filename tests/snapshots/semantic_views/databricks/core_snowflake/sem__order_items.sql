@@ -1,4 +1,12 @@
-{{ config(materialized='metric_view', static_analysis='off') }}
+{{ config(
+    materialized='metric_view',
+    static_analysis='off',
+    view_update_via_alter=false,
+    post_hook=[
+        'alter table {{ this }} alter column `order__ordered_at` set tags (\'S_LAYER_KIND\' = \'date\', \'S_LAYER_SPEC\' = \'{"time":{"grain":"day"}}\')',
+        'alter table {{ this }} alter column `order__status` set tags (\'S_LAYER_KIND\' = \'category\')'
+    ]
+) }}
 
 version: 1.1
 source: "{{ ref('order_items') }}"
@@ -25,6 +33,8 @@ dimensions:
   - name: "order__ordered_at"
     expr: "orders.ordered_at"
   - name: "order__status"
+    synonyms:
+      - "order status"
     expr: "orders.status"
   - name: "order__store"
     expr: "orders.store_id"

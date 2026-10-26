@@ -30,6 +30,8 @@ All notable changes to this project are documented here. The format follows
 - Snowflake semantic view members with an `s_layer` block get its synonyms as `WITH SYNONYMS`
   and the tags `S_LAYER_KIND`, `S_LAYER_LABEL` and `S_LAYER_SPEC`, which say what each member
   means. The README shows the `on-run-start` hooks that create the tags.
+- Databricks metric view fields with an `s_layer` block get its `synonyms`, and the Unity
+  Catalog column tags `S_LAYER_KIND` and `S_LAYER_SPEC`, set by a post-hook after every build.
 
 ### Known limitations
 

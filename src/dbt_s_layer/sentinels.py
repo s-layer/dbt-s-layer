@@ -74,6 +74,11 @@ def _jinja_str(value: str) -> str:
     return "'" + value.replace("\\", "\\\\").replace("'", "\\'") + "'"
 
 
+def jinja_literal(value: str) -> str:
+    """Return `value` as a Jinja string literal."""
+    return _jinja_str(value)
+
+
 def render_ref(
     package: str, name: str, version: int | float | str | None, *, root_package: str
 ) -> str:
