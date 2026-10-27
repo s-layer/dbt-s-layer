@@ -360,8 +360,43 @@ differences:
   can use the alias in queries, as in `orders.*`.
 - **Metrics.** Ratio and derived metrics name their inputs bare. Labels have no place in a
   DuckDB semantic view and are dropped; descriptions become `COMMENT`s.
-- **S-LAYER.** A member's `s_layer` `synonyms` become `WITH SYNONYMS`. The kind and the rest of
-  the block are not written yet: they need member tags, which the extension adds in 0.17.
+- **S-LAYER.** A member's `s_layer` block becomes `WITH SYNONYMS` and tags, as on Snowflake
+  (see [DuckDB tags](#duckdb-tags)).
+
+### DuckDB tags
+
+A dimension or metric with an [`s_layer` block](#describing-what-a-field-means-s_layer) gets
+the same three tags as on Snowflake (see [Snowflake tags](#snowflake-tags)), after its comment
+and synonyms:
+
+```sql
+orders.revenue AS SUM(orders.amount) WITH SYNONYMS = ('sales', 'turnover')
+  WITH TAG (S_LAYER_KIND = 'currency', S_LAYER_LABEL = 'Revenue',
+            S_LAYER_SPEC = '{"value":{"currency":"USD"}}')
+```
+
+DuckDB stores tag names as written, so there are no tag objects to create and no
+`on-run-start` hooks to add. Read the tags back from the `TAGS` rows of
+`describe_semantic_view('sem__orders')`. Values have the same 256-character limit as on
+Snowflake, and `generate` stops with an error naming every member over it.
+
+Tags need extension 0.17 or later. An older extension does not reject the clause: it keeps it
+as part of the member's expression, and the member then fails when it is queried. So each model
+asks DuckDB which extension version is loaded when dbt runs it, and writes the tags only on 0.17
+or later. On an older extension you get the synonyms and comments without the tags. `dbt parse`
+runs no query and leaves the tags out.
+
+To decide yourself, set the `s_layer_duckdb_tags` var in `dbt_project.yml`. Set it to `true`
+to keep the tags on a local build of the extension, whose version is a commit hash. Set it to
+`false` to never write them:
+
+```yaml
+vars:
+  s_layer_duckdb_tags: true
+```
+
+The tag values are checked against the 256-character limit whether or not they end up written.
+A member that is left out of the view (see the differences above) is not checked.
 
 ### Install the package and the extension
 
@@ -390,9 +425,9 @@ does the same. Which extension version you get depends on your DuckDB:
 
 | DuckDB | Extension | Notes |
 | ------ | --------- | ----- |
-| 2.0 | 0.16 | `SUM` over integers returns `HUGEINT` (`BIGINT` before 0.15). |
-| 1.5.6 | 0.13 | The oldest supported with dbt Core. |
-| 1.5.4 (inside dbt Fusion 2.0.8 and 2.0.9) | 0.11 | Best effort. Creates every view in the default schema, ignoring `+schema`, so keep `sem__` names unique per database. |
+| 2.0 | 0.16 or 0.17 | Member tags need 0.17. `SUM` over integers returns `HUGEINT` (`BIGINT` before 0.15). |
+| 1.5.6 | 0.13 | The oldest supported with dbt Core. No member tags. |
+| 1.5.4 (inside dbt Fusion 2.0.8 and 2.0.9) | 0.11 | Best effort. No member tags. Creates every view in the default schema, ignoring `+schema`, so keep `sem__` names unique per database. |
 
 Query a view with `semantic_view('sem__orders', dimensions := [...], metrics := [...])`, or, from
 0.16, `SEMANTIC_VIEW(sem__orders DIMENSIONS ... METRICS ...)`. A metric with a non-additive
@@ -400,7 +435,8 @@ dimension cannot be queried together with a `COUNT(DISTINCT)` or percentile metr
 
 The generated models have been built with `dbt build` on dbt Core 1.12.6 + dbt-duckdb 1.11.1
 (DuckDB 2.0, extension 0.16) and on Fusion 2.0.8 (extension 0.11), and every dimension and metric
-of the test project's views answered on extensions 0.11, 0.13 and 0.16.
+of the test project's views answered on extensions 0.11, 0.13 and 0.16 (with tags off), and on a
+build of 0.17, whose `DESCRIBE` returned every tag as written.
 
 ## Describing what a field means (`s_layer`)
 

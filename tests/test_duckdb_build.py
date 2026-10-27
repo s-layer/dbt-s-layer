@@ -8,6 +8,11 @@ duckdb_semantic_views materialization, from GitHub), and runs `dbt parse`,
 into a DuckDB file. The project's on-run-start hooks install and load the
 semantic_views extension, and a data test added after `generate` queries a view.
 
+Members with an `s_layer` block get `WITH TAG` when the loaded extension is 0.17 or
+later (`s_layer_duckdb_tags` is left unset, so the models decide); dbt Fusion's
+DuckDB 1.5.4 gets 0.11. With DBT_S_LAYER_DUCKDB_TAGS=required, dbt Core's build also
+checks the tags of `revenue` through DESCRIBE.
+
 Engines come from `DBT_S_LAYER_FUSION` / `DBT_S_LAYER_CORE` (paths), else from
 PATH (`dbtf` or a Fusion `dbt`; a dbt Core `dbt` with the duckdb adapter). Each
 engine's test skips when it is not found, and when `dbt deps` cannot download the
@@ -17,6 +22,7 @@ package. CI installs neither engine, so there it skips.
 from __future__ import annotations
 
 import json
+import os
 from typing import TYPE_CHECKING, Any
 
 import pytest
@@ -42,6 +48,17 @@ select * from semantic_view(
 )
 where customer__country <> 'gb' or revenue <> 10 or paid_revenue <> 10
     or average_order_value <> 10
+"""
+
+# Fails (returns a row) unless sem__orders' revenue carries its S_LAYER_KIND tag.
+TAGS_TEST = """\
+{{ config(static_analysis='off') }}
+{%- set view = ref('sem__orders') %}
+select 1 where (
+    select count(*) from describe_semantic_view('{{ view.schema }}.{{ view.identifier }}')
+    where object_name = 'revenue' and property = 'TAGS'
+        and json_extract_string(property_value, '$.S_LAYER_KIND') = 'currency'
+) <> 1
 """
 
 
@@ -74,6 +91,9 @@ def test_generated_semantic_views_build(kind: str, project: str, tmp_path: Path)
     tests_dir = project_dir / "tests"
     tests_dir.mkdir()
     (tests_dir / "sem_orders_answers.sql").write_text(ANSWER_TEST)
+    tags = kind == "dbt Core" and os.environ.get("DBT_S_LAYER_DUCKDB_TAGS") == "required"
+    if tags:
+        (tests_dir / "sem_orders_tags.sql").write_text(TAGS_TEST)
 
     ok(run(binary, "parse", cwd=project_dir))
     result = runner.invoke(app, ["check", "--project-dir", str(project_dir)])
@@ -82,6 +102,7 @@ def test_generated_semantic_views_build(kind: str, project: str, tmp_path: Path)
     built = run(binary, "build", cwd=project_dir)
     ok(built)
     assert "sem_orders_answers" in built.stdout
+    assert ("sem_orders_tags" in built.stdout) == tags
 
     loaded = load_project(project_dir)
     refs = build_ref_map(loaded)

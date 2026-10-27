@@ -32,8 +32,10 @@ from dbt_s_layer.semantic_views import MetricRef, RenderedView, is_bare_identifi
 from dbt_s_layer.sentinels import escape_jinja, has_reserved_prefix, postflight
 from dbt_s_layer.snowflake import (
     SIMPLE_AGGREGATIONS,
+    check_tag_values,
     column_reference_indexes,
     is_significant,
+    s_layer_tag_values,
 )
 
 if TYPE_CHECKING:
@@ -41,6 +43,7 @@ if TYPE_CHECKING:
 
     from dbt_s_layer.semantic_views import (
         DerivedMetricSpec,
+        DimensionSpec,
         MetricSpec,
         SemanticViewSpec,
     )
@@ -50,6 +53,22 @@ REPOSITORY = "s-layer/dbt-duckdb-semantic-views"
 # In manifest.json `macros` when the package is installed.
 MATERIALIZATION_MACRO = "macro.duckdb_semantic_views.materialization_semantic_view_duckdb"
 CONFIG = "{{ config(materialized='semantic_view', static_analysis='off') }}"
+# Sets `s_layer_tags`: whether members with an `s_layer` block get `WITH TAG`. The
+# clause needs extension 0.17; an older one keeps it as part of the expression. Unless
+# the `s_layer_duckdb_tags` var says, the loaded extension's version decides (a local
+# build, whose version is a commit hash, gets none); `dbt parse` runs no query.
+_TAGGING_EXTENSION = (
+    "select count(*) from duckdb_extensions() where extension_name = 'semantic_views' "
+    "and loaded and regexp_matches(extension_version, '^v(0[.](1[7-9]|[2-9][0-9])|[1-9][0-9]*)[.]')"
+)
+TAGS_SWITCH = (
+    "{%- set s_layer_tags = var('s_layer_duckdb_tags', none) %}\n"
+    "{%- if s_layer_tags is none %}\n"
+    "{%- set s_layer_tags = execute and run_query(\n"
+    f'    "{_TAGGING_EXTENSION}"\n'
+    ").columns[0].values()[0] > 0 %}\n"
+    "{%- endif %}"
+)
 # What a table alias gets when its semantic model's name is a reserved word.
 ALIAS_SUFFIX = "_t"
 
@@ -194,10 +213,22 @@ def _comment(text: str | None) -> str:
     return "" if text is None else f" COMMENT = {sql_string(text)}"
 
 
-def _synonyms(block: SemanticFormat | None) -> str:
-    if block is None or not block.synonyms:
+def _s_layer(block: SemanticFormat | None, label: str | None) -> str:
+    """
+    Return a member's S-LAYER slots: `WITH SYNONYMS`, then `WITH TAG` behind the switch.
+
+    Only members with an `s_layer` block get them. The tag names are bare: DuckDB
+    stores them as written, with no tag objects to create.
+    """
+    if block is None:
         return ""
-    return f" WITH SYNONYMS = ({', '.join(sql_string(s) for s in block.synonyms)})"
+    text = ""
+    if block.synonyms:
+        text += f" WITH SYNONYMS = ({', '.join(sql_string(s) for s in block.synonyms)})"
+    values = ", ".join(
+        f"{name} = {sql_string(value)}" for name, value in s_layer_tag_values(block, label)
+    )
+    return f"{text}{{% if s_layer_tags %}} WITH TAG ({values}){{% endif %}}"
 
 
 def _lambda_or_subquery(words: list[str]) -> bool:
@@ -318,6 +349,7 @@ class _Member:
     # The name in the view, unquoted.
     name: str
     line: str
+    spec: DimensionSpec | MetricSpec | DerivedMetricSpec
 
 
 class _Renderer:
@@ -377,9 +409,9 @@ class _Renderer:
                 continue
             line = (
                 f"  {place.alias}.{quote_name(name)} AS {expr}"
-                f"{_comment(dimension.comment)}{_synonyms(dimension.s_layer)}"
+                f"{_comment(dimension.comment)}{_s_layer(dimension.s_layer, dimension.label)}"
             )
-            members.append(_Member("dimension", name, line))
+            members.append(_Member("dimension", name, line, dimension))
         return members
 
     def aggregate(self, metric: MetricSpec, expr: str) -> str:
@@ -426,9 +458,9 @@ class _Renderer:
             line = (
                 f"  {private}{place.alias}.{quote_name(metric.name)}{non_additive} AS "
                 f"{self.aggregate(metric, expr)}{_comment(metric.comment)}"
-                f"{_synonyms(metric.s_layer)}"
+                f"{_s_layer(metric.s_layer, metric.label)}"
             )
-            members.append(_Member("metric", metric.name, line))
+            members.append(_Member("metric", metric.name, line, metric))
         return members
 
     def derived(self, metric: DerivedMetricSpec, available: set[str]) -> _Member | None:
@@ -443,9 +475,9 @@ class _Renderer:
         private = "PRIVATE " if metric.private else ""
         line = (
             f"  {private}{quote_name(metric.name)} AS {expr}"
-            f"{_comment(metric.comment)}{_synonyms(metric.s_layer)}"
+            f"{_comment(metric.comment)}{_s_layer(metric.s_layer, metric.label)}"
         )
-        return _Member("metric", metric.name, line)
+        return _Member("metric", metric.name, line, metric)
 
     def check_names(self, members: list[_Member]) -> None:
         seen: dict[str, str] = {}
@@ -485,6 +517,8 @@ def render_duckdb(spec: SemanticViewSpec) -> RenderedView:
             f"sem__{spec.name}: a semantic view needs at least one dimension or metric."
         )
     renderer.check_names(dimensions + metrics)
+    # Only members that are written: a left-out member's tags never reach DuckDB.
+    check_tag_values(m.spec for m in dimensions + metrics)
 
     parts = [_clause("TABLES", [renderer.table(t.alias) for t in spec.tables])]
     if spec.relationships:
@@ -505,6 +539,9 @@ def render_duckdb(spec: SemanticViewSpec) -> RenderedView:
         parts.append(_clause("METRICS", [m.line for m in metrics]))
     if spec.comment is not None:
         parts.append(f"COMMENT = {sql_string(spec.comment)}\n")
-    body = f"{CONFIG}\n\n" + "".join(parts)
+    header = CONFIG
+    if any(m.spec.s_layer is not None for m in dimensions + metrics):
+        header += "\n" + TAGS_SWITCH
+    body = f"{header}\n\n" + "".join(parts)
     postflight(body, context=f"sem__{spec.name}.sql")
     return RenderedView(body=body, warnings=tuple(sorted(renderer.warnings)))

@@ -25,7 +25,7 @@ from dbt_s_layer.semantic_views import DimensionSpec, MetricRef, SqlToken, scan_
 from dbt_s_layer.sentinels import escape_jinja, postflight
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Iterable, Sequence
     from collections.abc import Set as AbstractSet
 
     from s_layer_semantic_formats import SemanticFormat
@@ -234,16 +234,16 @@ def member_name(member: DimensionSpec | MetricSpec | DerivedMetricSpec) -> str:
     return f"metric {member.name!r}"
 
 
-def _check_tag_values(spec: SemanticViewSpec) -> None:
+def check_tag_values(members: Iterable[DimensionSpec | MetricSpec | DerivedMetricSpec]) -> None:
     """
-    Raise `SLayerBlockError` naming every tag value over Snowflake's limit.
+    Raise `SLayerBlockError` naming every tag value of `members` over the 256 limit.
 
-    S_LAYER_KIND is a vocabulary word and always fits; the label and the spec
-    are never truncated, so a member whose label or spec is too long stops
-    `generate` here rather than `dbt run` later.
+    Snowflake and DuckDB share the limit. S_LAYER_KIND is a vocabulary word and
+    always fits; the label and the spec are never truncated, so a member whose
+    label or spec is too long stops `generate` here rather than `dbt run` later.
     """
     problems: list[str] = []
-    for member in (*spec.dimensions, *spec.metrics, *spec.derived_metrics):
+    for member in members:
         if member.s_layer is None:
             continue
         if member.label is not None and len(member.label) > MAX_TAG_LENGTH:
@@ -259,14 +259,29 @@ def _check_tag_values(spec: SemanticViewSpec) -> None:
         raise SLayerBlockError("; ".join(problems), problems=tuple(problems))
 
 
+def s_layer_tag_values(block: SemanticFormat, label: str | None) -> list[tuple[str, str]]:
+    """
+    Return a member's S-LAYER tags as (name, value), for Snowflake and DuckDB.
+
+    S_LAYER_LABEL is the member's dbt label, when it has one; S_LAYER_SPEC is left
+    out when the block says nothing beyond its kind.
+    """
+    tags = [("S_LAYER_KIND", block.kind)]
+    if label is not None:
+        tags.append(("S_LAYER_LABEL", label))
+    spec = to_compact_json(block)
+    if spec != "{}":
+        tags.append(("S_LAYER_SPEC", spec))
+    return tags
+
+
 def _s_layer(block: SemanticFormat | None, label: str | None) -> str:
     """
     Return a member's S-LAYER slots: `WITH SYNONYMS`, then `WITH TAG`.
 
     Snowflake accepts them only in that order, before `COMMENT`. Only members with
     an `s_layer` block get them. The tag names are qualified with the
-    `s_layer_tags` schema set at the top of the body; S_LAYER_SPEC is left out
-    when the block says nothing beyond its kind.
+    `s_layer_tags` schema set at the top of the body.
     """
     if block is None:
         return ""
@@ -274,14 +289,9 @@ def _s_layer(block: SemanticFormat | None, label: str | None) -> str:
     if block.synonyms:
         names = ", ".join(escape_jinja(sql_string(name)) for name in block.synonyms)
         text += f" WITH SYNONYMS = ({names})"
-    tags = [("S_LAYER_KIND", block.kind)]
-    if label is not None:
-        tags.append(("S_LAYER_LABEL", label))
-    spec = to_compact_json(block)
-    if spec != "{}":
-        tags.append(("S_LAYER_SPEC", spec))
     values = ", ".join(
-        f"{{{{ s_layer_tags }}}}.{name} = {escape_jinja(sql_string(value))}" for name, value in tags
+        f"{{{{ s_layer_tags }}}}.{name} = {escape_jinja(sql_string(value))}"
+        for name, value in s_layer_tag_values(block, label)
     )
     return f"{text} WITH TAG ({values})"
 
@@ -549,7 +559,7 @@ def render_snowflake(spec: SemanticViewSpec) -> str:
             f"sem__{spec.name}: a semantic view needs at least one dimension or metric."
         )
     check_name_shadowing(spec)
-    _check_tag_values(spec)
+    check_tag_values((*spec.dimensions, *spec.metrics, *spec.derived_metrics))
     parts = [_clause("TABLES", [_table(t) for t in spec.tables])]
     if spec.relationships:
         parts.append(

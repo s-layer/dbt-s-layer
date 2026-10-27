@@ -8,7 +8,6 @@ from pathlib import Path
 
 import jinja2
 import pytest
-from s_layer_semantic_formats import validate_block
 
 from dbt_s_layer.duckdb_views import CONFIG, qualify, render_duckdb
 from dbt_s_layer.errors import SemanticViewError
@@ -242,20 +241,6 @@ def test_text_survives_jinja(text: str, literal: str) -> None:
     sql = _sql(_render(_view(comment=text)).body)
     # Jinja drops the final newline.
     assert sql.endswith(f")\nCOMMENT = {literal}")
-
-
-def test_synonyms_but_no_tags() -> None:
-    block = validate_block(
-        {"value": {"kind": "category"}, "synonyms": ["order status", "it's"]}, "dimension"
-    )
-    status = replace(STATUS, comment="State.", s_layer=block)
-    body = _body(_view(dimensions=(status,)))
-    assert (
-        "  orders.status AS orders.status COMMENT = 'State.' "
-        "WITH SYNONYMS = ('order status', 'it''s')\n"
-    ) in body
-    assert "S_LAYER" not in body
-    assert "TAG" not in body
 
 
 # --- exprs --------------------------------------------------------------------------

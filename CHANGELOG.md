@@ -36,13 +36,14 @@ All notable changes to this project are documented here. The format follows
   `semantic_views` extension: 0.13 or later on dbt Core, and the 0.11 that dbt Fusion's DuckDB
   loads), one per semantic model. Every column an expression
   reads is qualified with its table, so a column two joined tables share stays unambiguous.
-  `s_layer` synonyms become `WITH SYNONYMS`.
+  Members with an `s_layer` block get its synonyms as `WITH SYNONYMS` and, on extension 0.17
+  or later, the tags `S_LAYER_KIND`, `S_LAYER_LABEL` and `S_LAYER_SPEC`. Each model checks
+  the loaded extension's version when it runs; the `s_layer_duckdb_tags` var overrides that.
 
 ### Known limitations
 
-- DuckDB semantic views carry `s_layer` synonyms but not yet the kind or spec, which need the
-  extension's member tags (0.17). In a DuckDB view of more than one table, a member whose
-  expression holds a lambda or a subquery is left out, with a warning.
+- In a DuckDB view of more than one table, a member whose expression holds a lambda, a
+  subquery or a list comprehension is left out, with a warning.
 - dbt Core drops a new-spec semantic model on a versioned model, and the metrics declared with
   it. dbt-s-layer warns, naming both, and suggests parsing with Fusion.
 - Cumulative and conversion metrics, metric filters, and some percentile kinds are left out of
