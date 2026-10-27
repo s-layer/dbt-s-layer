@@ -37,7 +37,7 @@ from dbt_s_layer.snowflake import (
 )
 
 if TYPE_CHECKING:
-    from s_layer_semantic_formats import SLayerBlock
+    from s_layer_semantic_formats import SemanticFormat
 
     from dbt_s_layer.semantic_views import (
         DerivedMetricSpec,
@@ -194,7 +194,7 @@ def _comment(text: str | None) -> str:
     return "" if text is None else f" COMMENT = {sql_string(text)}"
 
 
-def _synonyms(block: SLayerBlock | None) -> str:
+def _synonyms(block: SemanticFormat | None) -> str:
     if block is None or not block.synonyms:
         return ""
     return f" WITH SYNONYMS = ({', '.join(sql_string(s) for s in block.synonyms)})"
