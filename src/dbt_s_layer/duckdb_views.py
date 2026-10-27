@@ -39,7 +39,7 @@ from dbt_s_layer.snowflake import (
 )
 
 if TYPE_CHECKING:
-    from s_layer_semantic_formats import SLayerBlock
+    from s_layer_semantic_formats import SemanticFormat
 
     from dbt_s_layer.semantic_views import (
         DerivedMetricSpec,
@@ -213,7 +213,7 @@ def _comment(text: str | None) -> str:
     return "" if text is None else f" COMMENT = {sql_string(text)}"
 
 
-def _s_layer(block: SLayerBlock | None, label: str | None) -> str:
+def _s_layer(block: SemanticFormat | None, label: str | None) -> str:
     """
     Return a member's S-LAYER slots: `WITH SYNONYMS`, then `WITH TAG` behind the switch.
 

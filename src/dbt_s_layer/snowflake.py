@@ -28,7 +28,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
     from collections.abc import Set as AbstractSet
 
-    from s_layer_semantic_formats import SLayerBlock
+    from s_layer_semantic_formats import SemanticFormat
 
     from dbt_s_layer.semantic_views import (
         DerivedMetricSpec,
@@ -259,7 +259,7 @@ def check_tag_values(members: Iterable[DimensionSpec | MetricSpec | DerivedMetri
         raise SLayerBlockError("; ".join(problems), problems=tuple(problems))
 
 
-def s_layer_tag_values(block: SLayerBlock, label: str | None) -> list[tuple[str, str]]:
+def s_layer_tag_values(block: SemanticFormat, label: str | None) -> list[tuple[str, str]]:
     """
     Return a member's S-LAYER tags as (name, value), for Snowflake and DuckDB.
 
@@ -275,7 +275,7 @@ def s_layer_tag_values(block: SLayerBlock, label: str | None) -> list[tuple[str,
     return tags
 
 
-def _s_layer(block: SLayerBlock | None, label: str | None) -> str:
+def _s_layer(block: SemanticFormat | None, label: str | None) -> str:
     """
     Return a member's S-LAYER slots: `WITH SYNONYMS`, then `WITH TAG`.
 
