@@ -28,7 +28,7 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
     from collections.abc import Set as AbstractSet
 
-    from s_layer_semantic_formats import SLayerBlock
+    from s_layer_semantic_formats import SemanticFormat
 
     from dbt_s_layer.semantic_views import (
         DerivedMetricSpec,
@@ -259,7 +259,7 @@ def _check_tag_values(spec: SemanticViewSpec) -> None:
         raise SLayerBlockError("; ".join(problems), problems=tuple(problems))
 
 
-def _s_layer(block: SLayerBlock | None, label: str | None) -> str:
+def _s_layer(block: SemanticFormat | None, label: str | None) -> str:
     """
     Return a member's S-LAYER slots: `WITH SYNONYMS`, then `WITH TAG`.
 

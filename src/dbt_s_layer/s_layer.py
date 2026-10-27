@@ -21,7 +21,7 @@ from metricflow_semantic_interfaces.type_enums.dimension_type import DimensionTy
 from s_layer_semantic_formats import (
     TEMPORAL_KINDS,
     MemberType,
-    SLayerBlock,
+    SemanticFormat,
     SLayerValidationError,
     validate_block,
 )
@@ -47,14 +47,14 @@ class SLayerBlocks:
     """The valid blocks of a project, by member."""
 
     # metric name -> block
-    metrics: Mapping[str, SLayerBlock] = field(default_factory=dict[str, SLayerBlock])
+    metrics: Mapping[str, SemanticFormat] = field(default_factory=dict[str, SemanticFormat])
     # (semantic model, dimension name) -> block
-    dimensions: Mapping[tuple[str, str], SLayerBlock] = field(
-        default_factory=dict[tuple[str, str], SLayerBlock]
+    dimensions: Mapping[tuple[str, str], SemanticFormat] = field(
+        default_factory=dict[tuple[str, str], SemanticFormat]
     )
     # (semantic model, entity name) -> block
-    entities: Mapping[tuple[str, str], SLayerBlock] = field(
-        default_factory=dict[tuple[str, str], SLayerBlock]
+    entities: Mapping[tuple[str, str], SemanticFormat] = field(
+        default_factory=dict[tuple[str, str], SemanticFormat]
     )
 
 
@@ -68,7 +68,7 @@ def _mapping(raw: object) -> Mapping[str, Any]:
     return cast("Mapping[str, Any]", raw)
 
 
-def _validate(raw: Mapping[str, Any], member_type: MemberType) -> SLayerBlock:
+def _validate(raw: Mapping[str, Any], member_type: MemberType) -> SemanticFormat:
     """Validate `raw`, raising `SLayerValidationError` with one line per problem."""
     block = validate_block(raw, member_type)
     if block.label is not None:
@@ -76,7 +76,7 @@ def _validate(raw: Mapping[str, Any], member_type: MemberType) -> SLayerBlock:
     return block
 
 
-def _with_grain(block: SLayerBlock, raw: Mapping[str, Any], grain: str) -> SLayerBlock:
+def _with_grain(block: SemanticFormat, raw: Mapping[str, Any], grain: str) -> SemanticFormat:
     """Check a time dimension's block against its dbt granularity, filling the grain."""
     if block.kind not in TEMPORAL_KINDS:
         raise ValueError(
@@ -102,7 +102,7 @@ def _with_grain(block: SLayerBlock, raw: Mapping[str, Any], grain: str) -> SLaye
     return block
 
 
-def _check_metric(block: SLayerBlock, metric: PydanticMetric) -> None:
+def _check_metric(block: SemanticFormat, metric: PydanticMetric) -> None:
     params = metric.type_params.metric_aggregation_params
     nad = None if params is None else params.non_additive_dimension
     if block.aggregation is not None and nad is not None:
@@ -127,9 +127,9 @@ def read_s_layer_blocks(project: SemanticProject) -> SLayerBlocks:
     """
     manifest = project.semantic_manifest
     problems: list[str] = []
-    metrics: dict[str, SLayerBlock] = {}
-    dimensions: dict[tuple[str, str], SLayerBlock] = {}
-    entities: dict[tuple[str, str], SLayerBlock] = {}
+    metrics: dict[str, SemanticFormat] = {}
+    dimensions: dict[tuple[str, str], SemanticFormat] = {}
+    entities: dict[tuple[str, str], SemanticFormat] = {}
 
     for metric in sorted(manifest.metrics, key=lambda m: m.name):
         raw = _raw_block(metric.config)

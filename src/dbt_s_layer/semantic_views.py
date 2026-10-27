@@ -35,7 +35,7 @@ if TYPE_CHECKING:
     from metricflow_semantic_interfaces.implementations.semantic_model import (
         PydanticSemanticModel,
     )
-    from s_layer_semantic_formats import SLayerBlock
+    from s_layer_semantic_formats import SemanticFormat
 
     from dbt_s_layer.project import SemanticProject
 
@@ -106,7 +106,7 @@ class DimensionSpec:
     comment: str | None = None
     label: str | None = None
     # The member's `config.meta.s_layer` block, validated.
-    s_layer: SLayerBlock | None = None
+    s_layer: SemanticFormat | None = None
     # True when the dimension is an entity, so errors name it as one.
     entity: bool = False
 
@@ -142,7 +142,7 @@ class MetricSpec:
     comment: str | None = None
     label: str | None = None
     # The member's `config.meta.s_layer` block, validated.
-    s_layer: SLayerBlock | None = None
+    s_layer: SemanticFormat | None = None
 
 
 @dataclass(frozen=True)
@@ -163,7 +163,7 @@ class DerivedMetricSpec:
     comment: str | None = None
     label: str | None = None
     # The member's `config.meta.s_layer` block, validated.
-    s_layer: SLayerBlock | None = None
+    s_layer: SemanticFormat | None = None
 
 
 @dataclass(frozen=True)

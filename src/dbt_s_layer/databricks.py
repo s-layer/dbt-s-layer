@@ -30,7 +30,7 @@ from dbt_s_layer.sentinels import escape_jinja, has_reserved_prefix, jinja_liter
 from dbt_s_layer.snowflake import SIMPLE_AGGREGATIONS, column_references, member_name
 
 if TYPE_CHECKING:
-    from s_layer_semantic_formats import SLayerBlock
+    from s_layer_semantic_formats import SemanticFormat
 
     from dbt_s_layer.semantic_views import (
         DerivedMetricSpec,
@@ -133,7 +133,7 @@ def _item(
     *,
     label: str | None,
     comment: str | None,
-    s_layer: SLayerBlock | None = None,
+    s_layer: SemanticFormat | None = None,
 ) -> list[str]:
     lines = [f"  - name: {_text(name)}"]
     if label is not None:
