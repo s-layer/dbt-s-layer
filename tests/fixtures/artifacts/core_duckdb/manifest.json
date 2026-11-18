@@ -22,7 +22,7 @@
       "access": "protected",
       "alias": "customers_v1",
       "checksum": {
-        "checksum": "1a2503d725e1e65272bec93162acb67965fc56502f0c8f339e743cb00b26fc88",
+        "checksum": "cc2f74ce864bfc601eef0113ccb18ebb94bc8dcfee74ba0cf59df29587a6f5f2",
         "name": "sha256"
       },
       "columns": {},
@@ -105,7 +105,7 @@
       "patch_path": "fx://models/marts/customers.yml",
       "path": "marts/customers_v1.sql",
       "primary_key": [],
-      "raw_code": "select 1 as customer_id, 'gb' as country, cast('2024-01-01' as date) as signed_up_at",
+      "raw_code": "-- Two countries, gb with two customers, so a metric grouped by country sums across customers.\nselect * from (values\n  (1, 'gb', cast('2024-01-01' as date)),\n  (2, 'fr', cast('2024-01-05' as date)),\n  (3, 'gb', cast('2024-01-20' as date))\n) as t (customer_id, country, signed_up_at)",
       "refs": [],
       "relation_name": "\"fx\".\"marts\".\"customers_v1\"",
       "resource_type": "model",
@@ -121,7 +121,7 @@
       "access": "protected",
       "alias": "customers_v2",
       "checksum": {
-        "checksum": "1a2503d725e1e65272bec93162acb67965fc56502f0c8f339e743cb00b26fc88",
+        "checksum": "cc2f74ce864bfc601eef0113ccb18ebb94bc8dcfee74ba0cf59df29587a6f5f2",
         "name": "sha256"
       },
       "columns": {},
@@ -204,7 +204,7 @@
       "patch_path": "fx://models/marts/customers.yml",
       "path": "marts/customers_v2.sql",
       "primary_key": [],
-      "raw_code": "select 1 as customer_id, 'gb' as country, cast('2024-01-01' as date) as signed_up_at",
+      "raw_code": "-- Two countries, gb with two customers, so a metric grouped by country sums across customers.\nselect * from (values\n  (1, 'gb', cast('2024-01-01' as date)),\n  (2, 'fr', cast('2024-01-05' as date)),\n  (3, 'gb', cast('2024-01-20' as date))\n) as t (customer_id, country, signed_up_at)",
       "refs": [],
       "relation_name": "\"fx\".\"marts\".\"customers_v2\"",
       "resource_type": "model",
@@ -220,7 +220,7 @@
       "access": "protected",
       "alias": "metricflow_time_spine",
       "checksum": {
-        "checksum": "b2ae348c4fa66c853602998d931b8bfd361008b7d0b14133b63dff0689ac0fd2",
+        "checksum": "86e4819c4bb5c5d617a9c2288f4ee8a94b5e62fdaa4b933fe37073fa1d4bc43f",
         "name": "sha256"
       },
       "columns": {
@@ -320,7 +320,7 @@
       "patch_path": "fx://models/marts/time_spine.yml",
       "path": "marts/metricflow_time_spine.sql",
       "primary_key": [],
-      "raw_code": "select cast('2024-01-01' as date) as date_day",
+      "raw_code": "-- Every day the orders fall on, for the cumulative metric.\nselect cast(range as date) as date_day\nfrom range(cast('2024-01-01' as date), cast('2024-03-01' as date), interval 1 day)",
       "refs": [],
       "relation_name": "\"fx\".\"marts\".\"metricflow_time_spine\"",
       "resource_type": "model",
@@ -339,7 +339,7 @@
       "access": "protected",
       "alias": "Order_Items",
       "checksum": {
-        "checksum": "b3b835b6f165db19de8ce74b1a8b5017b2ba648dbbfa85e1e2aaa07545dffaec",
+        "checksum": "244f526230716e900b9348ac8f27e0b07d3d82c1335c3f647c3b48bc378f5702",
         "name": "sha256"
       },
       "columns": {},
@@ -421,7 +421,7 @@
       "patch_path": "fx://models/marts/order_items.yml",
       "path": "marts/order_items.sql",
       "primary_key": [],
-      "raw_code": "select 1 as order_item_id, 1 as order_id, cast('2024-01-01' as date) as ordered_at, 2 as quantity",
+      "raw_code": "-- Order 1 has two items and order 3 none, so an item count is not an order count.\nselect * from (values\n  (1, 1, cast('2024-01-03' as date), 2),\n  (2, 1, cast('2024-01-03' as date), 1),\n  (3, 2, cast('2024-01-10' as date), 4),\n  (4, 4, cast('2024-02-02' as date), 3),\n  (5, 5, cast('2024-02-15' as date), 1),\n  (6, 6, cast('2024-02-20' as date), 2)\n) as t (order_item_id, order_id, ordered_at, quantity)",
       "refs": [],
       "relation_name": "\"fx\".\"marts\".\"Order_Items\"",
       "resource_type": "model",
@@ -439,7 +439,7 @@
       "access": "protected",
       "alias": "orders",
       "checksum": {
-        "checksum": "c0eceaa141574cd424d945a79bfe16ba804c5ab7ff41a355b7edaa44f2dbd0a5",
+        "checksum": "7a57d0a7148243f479af91b9004d10015a94693fdde2ef0e4bfe0521525ef8a0",
         "name": "sha256"
       },
       "columns": {},
@@ -521,7 +521,7 @@
       "patch_path": null,
       "path": "marts/orders.sql",
       "primary_key": [],
-      "raw_code": "select 1 as order_id, 1 as customer_id, 1 as store_id, 'paid' as status, cast('2024-01-01' as date) as ordered_at, 10.0 as amount",
+      "raw_code": "-- Two months, two stores, three customers, and one order that is not paid (3), so revenue,\n-- paid_revenue, order counts and averages all differ from one another and between groups.\n-- Order 6's customer is not in customers: a join that drops it, rather than grouping it\n-- under a NULL country, loses its revenue.\nselect * from (values\n  (1, 1, 1, 'paid', cast('2024-01-03' as date), cast(10.00 as decimal(10, 2))),\n  (2, 2, 1, 'paid', cast('2024-01-10' as date), cast(25.00 as decimal(10, 2))),\n  (3, 1, 2, 'returned', cast('2024-01-10' as date), cast(7.50 as decimal(10, 2))),\n  (4, 3, 2, 'paid', cast('2024-02-02' as date), cast(40.00 as decimal(10, 2))),\n  (5, 2, 2, 'paid', cast('2024-02-15' as date), cast(12.50 as decimal(10, 2))),\n  (6, 4, 1, 'paid', cast('2024-02-20' as date), cast(5.00 as decimal(10, 2)))\n) as t (order_id, customer_id, store_id, status, ordered_at, amount)",
       "refs": [],
       "relation_name": "\"fx\".\"marts\".\"orders\"",
       "resource_type": "model",
@@ -537,7 +537,7 @@
       "access": "protected",
       "alias": "stores",
       "checksum": {
-        "checksum": "23673c382a8792cbca9e448d8c3b8a2d0c5aabf0a857e6f00b382e266793f1a0",
+        "checksum": "00510e5786f0ef8f58a14dc1c45e0714afbafcac5cd250a078383e8d2401d2f9",
         "name": "sha256"
       },
       "columns": {},
@@ -618,7 +618,7 @@
       "patch_path": null,
       "path": "stores.sql",
       "primary_key": [],
-      "raw_code": "select 1 as store_id, 'north' as region, cast('2024-01-01' as date) as opened_at",
+      "raw_code": "select * from (values\n  (1, 'north', cast('2024-01-01' as date)),\n  (2, 'south', cast('2024-01-01' as date))\n) as t (store_id, region, opened_at)",
       "refs": [],
       "relation_name": "\"fx\".\"marts\".\"stores\"",
       "resource_type": "model",

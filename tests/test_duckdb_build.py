@@ -38,17 +38,73 @@ from tests.engines import copy_project, find_engine, ok, run
 if TYPE_CHECKING:
     from pathlib import Path
 
-# Fails (returns rows) unless sem__orders answers with the fixture's one order.
+# Fails (returns rows) unless sem__orders gives the fixture's numbers, worked out by hand (see
+# test_duckdb_execute.test_the_numbers). A NULL or a missing or extra row counts as a mismatch.
 ANSWER_TEST = """\
 {{ config(static_analysis='off') }}
 {%- set view = ref('sem__orders') %}
-select * from semantic_view(
-    '{{ view.schema }}.{{ view.identifier }}',
-    dimensions := ['customer__country', 'order_month'],
-    metrics := ['revenue', 'paid_revenue', 'average_order_value']
+with actual as (
+    select * from semantic_view(
+        '{{ view.schema }}.{{ view.identifier }}',
+        dimensions := ['customer__country', 'order_month'],
+        metrics := ['revenue', 'paid_revenue', 'average_order_value']
+    )
+),
+expected (customer__country, order_month, revenue, paid_revenue, average_order_value) as (
+    values
+        ('fr', date '2024-01-01', 25.00, 25.00, 25.00),
+        ('fr', date '2024-02-01', 12.50, 12.50, 12.50),
+        ('gb', date '2024-01-01', 17.50, 10.00, 8.75),
+        ('gb', date '2024-02-01', 40.00, 40.00, 40.00),
+        (null, date '2024-02-01', 5.00, 5.00, 5.00)
 )
-where customer__country <> 'gb' or revenue <> 10 or paid_revenue <> 10
-    or average_order_value <> 10
+select *
+from expected e
+full outer join actual a
+    on a.customer__country is not distinct from e.customer__country
+    and cast(a.order_month as date) = e.order_month
+where a.order_month is null or e.order_month is null
+    or a.revenue is distinct from e.revenue
+    or a.paid_revenue is distinct from e.paid_revenue
+    or a.average_order_value is distinct from e.average_order_value
+"""
+
+# Fails (returns rows) unless two exports, built as tables by MetricFlow's SQL, hold what the
+# semantic view answers for the same saved query. The paid-only filter is applied by grouping
+# by status too, since dbt Fusion's extension (0.11) has no where_clause.
+EXPORTS_TEST = """\
+{{ config(static_analysis='off') }}
+{%- set view = ref('sem__orders') %}
+{%- set name = view.schema ~ '.' ~ view.identifier %}
+with by_day as (
+    select ordered_at, revenue from semantic_view(
+        '{{ name }}', dimensions := ['ordered_at'], metrics := ['revenue']
+    )
+),
+paid as (
+    select customer__country, store__region, sum(revenue) as revenue
+    from semantic_view(
+        '{{ name }}',
+        dimensions := ['customer__country', 'store__region', 'status'],
+        metrics := ['revenue']
+    )
+    where status = 'paid'
+    group by customer__country, store__region
+)
+select 'exp_revenue_by_day' as export, count(*) as mismatches
+from {{ ref('exp__revenue_by_day__exp_revenue_by_day') }} x
+full outer join by_day v on cast(x.order__ordered_at__day as date) = v.ordered_at
+where x.order__ordered_at__day is null or v.ordered_at is null
+    or x.revenue is distinct from v.revenue
+having count(*) > 0
+union all
+select 'exp_region_country', count(*)
+from {{ ref('exp__revenue_by_region_country__exp_region_country') }} x
+full outer join paid v
+    on x.customer__country is not distinct from v.customer__country
+    and x.store__region is not distinct from v.store__region
+where x.revenue is null or v.revenue is null or x.revenue is distinct from v.revenue
+having count(*) > 0
 """
 
 # Fails (returns a row) unless sem__orders' revenue carries its S_LAYER_KIND tag.
@@ -94,6 +150,7 @@ def test_generated_semantic_views_build(kind: str, project: str, tmp_path: Path)
     tests_dir = project_dir / "tests"
     tests_dir.mkdir()
     (tests_dir / "sem_orders_answers.sql").write_text(ANSWER_TEST)
+    (tests_dir / "sem_orders_match_exports.sql").write_text(EXPORTS_TEST)
     tags = kind == "dbt Core" and os.environ.get("DBT_S_LAYER_DUCKDB_TAGS") == "required"
     if tags:
         (tests_dir / "sem_orders_tags.sql").write_text(TAGS_TEST)
@@ -105,6 +162,7 @@ def test_generated_semantic_views_build(kind: str, project: str, tmp_path: Path)
     built = run(binary, "build", cwd=project_dir)
     ok(built)
     assert "sem_orders_answers" in built.stdout
+    assert "sem_orders_match_exports" in built.stdout
     assert ("sem_orders_tags" in built.stdout) == tags
 
     loaded = load_project(project_dir)
