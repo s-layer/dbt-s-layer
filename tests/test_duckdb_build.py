@@ -38,7 +38,6 @@ from tests.engines import copy_project, find_engine, ok, run
 if TYPE_CHECKING:
     from pathlib import Path
 
-# Fails (returns rows) unless sem__orders answers with the fixture's one order.
 # Fails (returns rows) unless sem__orders gives the fixture's numbers, worked out by hand (see
 # test_duckdb_execute.test_the_numbers). A NULL or a missing or extra row counts as a mismatch.
 ANSWER_TEST = """\
