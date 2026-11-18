@@ -10,7 +10,8 @@ and a third time, which must change nothing.
 dbt Core's own `dbt parse` takes about 5.4 s on this project (start-up bound,
 05-RESEARCH finding 1), so with dbt Core only the behaviour is checked, not the
 time. Engines come from `DBT_S_LAYER_FUSION` / `DBT_S_LAYER_CORE`, else PATH, as in
-test_snowflake_compile.py; each engine's test skips when it is not found.
+test_snowflake_compile.py; each engine's test skips when it is not found. CI runs
+both in its `engines` job, where a skip fails the run (tests/ci_skips.py).
 """
 
 from __future__ import annotations
@@ -30,6 +31,8 @@ if TYPE_CHECKING:
 
 BUDGET_SECONDS = 5.0
 EDITED = "models/marts/fact_007.yml"
+
+pytestmark = pytest.mark.engine
 
 
 def _hook(binary: str, project: Path) -> tuple[subprocess.CompletedProcess[str], float]:

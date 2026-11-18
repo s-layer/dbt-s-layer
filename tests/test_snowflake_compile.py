@@ -13,7 +13,8 @@ Jinja, the refs and the DAG edges, not that Snowflake accepts the DDL.
 Engines come from `DBT_S_LAYER_FUSION` / `DBT_S_LAYER_CORE` (paths), else from
 PATH (`dbtf` or a Fusion `dbt`; a dbt Core `dbt` with the snowflake adapter).
 Each engine's test skips when it is not found, and when `dbt deps` cannot
-download dbt_semantic_view. CI installs neither engine, so there it skips.
+download dbt_semantic_view. CI installs both engines in its `engines` job, where a
+skip fails the run (tests/ci_skips.py).
 """
 
 from __future__ import annotations
@@ -33,6 +34,8 @@ from tests.engines import copy_project, find_engine, ok, run
 
 if TYPE_CHECKING:
     from pathlib import Path
+
+pytestmark = pytest.mark.engine
 
 
 @pytest.mark.parametrize(

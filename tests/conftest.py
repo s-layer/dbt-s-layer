@@ -8,6 +8,9 @@ from pathlib import Path
 
 import pytest
 
+# Under CI, a skipped test fails the run (tests/ci_skips.py).
+pytest_plugins = ["tests.ci_skips"]
+
 FIXTURES = Path(__file__).parent / "fixtures"
 ARTIFACTS = FIXTURES / "artifacts"
 PROJECTS = FIXTURES / "projects"
