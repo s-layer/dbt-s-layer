@@ -38,9 +38,10 @@ jobs:
 
       - name: Tests
         # The DuckDB execution tests may not skip for want of the semantic_views extension.
+        # The real-engine tests run in the `engines` job below.
         env:
           DBT_S_LAYER_DUCKDB_EXTENSION: required
-        run: uv run pytest
+        run: uv run pytest -m "not engine"
 
       # The lockfile's duckdb loads extension 0.16; these load 0.13 (the floor for dbt Core)
       # and 0.11 (the one dbt Fusion's embedded DuckDB 1.5.4 gets).
@@ -51,6 +52,67 @@ jobs:
         run: |
           DBT_S_LAYER_DUCKDB_VERSION=1.5.6 uv run --with duckdb==1.5.6 python -m pytest tests/test_duckdb_execute.py
           DBT_S_LAYER_DUCKDB_VERSION=1.5.4 uv run --with duckdb==1.5.4 python -m pytest tests/test_duckdb_execute.py
+
+      - name: Cache pruning
+        if: always()
+        run: uv cache prune --ci
+
+  engines:
+    # The tests marked `engine` run real dbt engines: dbt Core with the duckdb and snowflake
+    # adapters, dbt Core with dbt-databricks (which needs dbt-core < 1.12.6), and dbt Fusion.
+    # Each engine gets its own virtualenv, outside the project's. Under CI a skipped test
+    # fails the run (tests/ci_skips.py), so a missing engine cannot pass as green.
+    name: Real dbt engines
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      FUSION_VERSION: "2.0.8"
+      FUSION_SHA256: fdac34c4bdd8f76e2afd21cd533e04fbc2159323f16487da6dae007b3bacfaa7
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.1.0
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v7.6.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+          python-version: "3.12"
+
+      - name: Sync dependencies
+        run: uv sync --locked --dev
+
+      - name: Install dbt Core engines
+        run: |
+          uv venv --python 3.12 "$RUNNER_TEMP/dbt-core"
+          VIRTUAL_ENV="$RUNNER_TEMP/dbt-core" uv pip install \
+            dbt-core==1.12.6 dbt-duckdb==1.11.1 dbt-snowflake==1.12.5
+          uv venv --python 3.12 "$RUNNER_TEMP/dbt-databricks"
+          VIRTUAL_ENV="$RUNNER_TEMP/dbt-databricks" uv pip install \
+            dbt-core==1.12.5 dbt-databricks==1.12.7
+          echo "DBT_S_LAYER_CORE=$RUNNER_TEMP/dbt-core/bin/dbt" >> "$GITHUB_ENV"
+          echo "DBT_S_LAYER_CORE_DATABRICKS=$RUNNER_TEMP/dbt-databricks/bin/dbt" >> "$GITHUB_ENV"
+
+      - name: Install dbt Fusion
+        run: |
+          curl -sSfL -o "$RUNNER_TEMP/fusion.tar.gz" \
+            "https://public.cdn.getdbt.com/fs/cli/fs-v${FUSION_VERSION}-x86_64-unknown-linux-gnu.tar.gz"
+          echo "${FUSION_SHA256}  $RUNNER_TEMP/fusion.tar.gz" | sha256sum --check
+          mkdir -p "$RUNNER_TEMP/fusion"
+          tar -xzf "$RUNNER_TEMP/fusion.tar.gz" -C "$RUNNER_TEMP/fusion"
+          echo "DBT_S_LAYER_FUSION=$RUNNER_TEMP/fusion/dbt" >> "$GITHUB_ENV"
+
+      - name: Show engine versions
+        run: |
+          "$DBT_S_LAYER_CORE" --version
+          "$DBT_S_LAYER_CORE_DATABRICKS" --version
+          "$DBT_S_LAYER_FUSION" --version
+
+      - name: Engine tests
+        env:
+          DO_NOT_TRACK: "1"
+        run: uv run pytest -m engine -rs
 
       - name: Cache pruning
         if: always()

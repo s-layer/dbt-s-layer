@@ -11,7 +11,7 @@ compiled definition is YAML, not that Databricks accepts it.
 Engines come from `DBT_S_LAYER_FUSION` / `DBT_S_LAYER_CORE_DATABRICKS` (paths), else
 from PATH (`dbtf` or a Fusion `dbt`; a dbt Core `dbt` with dbt-databricks >= 1.12.0,
 which needs dbt-core < 1.12.6). Each engine's test skips when it is not found. CI
-installs neither engine, so there it skips.
+installs both in its `engines` job, where a skip fails the run (tests/ci_skips.py).
 """
 
 from __future__ import annotations
@@ -32,6 +32,8 @@ from tests.engines import copy_project, find_engine, ok, run
 
 if TYPE_CHECKING:
     from pathlib import Path
+
+pytestmark = pytest.mark.engine
 
 
 @pytest.mark.parametrize(

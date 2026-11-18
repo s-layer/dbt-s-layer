@@ -66,4 +66,9 @@ ignore = [
 ]
 
 [tool.pytest.ini_options]
-addopts = "-v"
+addopts = "-v --strict-markers"
+markers = [
+    # Needs a real dbt engine (dbt Core, dbt Core with dbt-databricks, Fusion). CI runs
+    # these in the quality workflow's `engines` job and deselects them elsewhere.
+    "engine: runs a real dbt engine (tests/engines.py)",
+]

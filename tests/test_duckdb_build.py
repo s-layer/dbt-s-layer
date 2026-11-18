@@ -16,7 +16,8 @@ checks the tags of `revenue` through DESCRIBE.
 Engines come from `DBT_S_LAYER_FUSION` / `DBT_S_LAYER_CORE` (paths), else from
 PATH (`dbtf` or a Fusion `dbt`; a dbt Core `dbt` with the duckdb adapter). Each
 engine's test skips when it is not found, and when `dbt deps` cannot download the
-package. CI installs neither engine, so there it skips.
+package. CI installs both engines in its `engines` job, where a skip fails the run
+(tests/ci_skips.py).
 """
 
 from __future__ import annotations
@@ -60,6 +61,8 @@ select 1 where (
         and json_extract_string(property_value, '$.S_LAYER_KIND') = 'currency'
 ) <> 1
 """
+
+pytestmark = pytest.mark.engine
 
 
 @pytest.mark.parametrize(
