@@ -47,6 +47,9 @@ jobs:
         id: tests
         continue-on-error: true
         # The real-engine tests need engines this job does not install.
+        # The DuckDB execution tests may not skip for want of the semantic_views extension.
+        env:
+          DBT_S_LAYER_DUCKDB_EXTENSION: required
         run: uv run pytest -m "not engine"
 
       - name: Cache pruning
