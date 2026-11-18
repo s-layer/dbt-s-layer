@@ -24,6 +24,7 @@ DBT_S_LAYER_DUCKDB_TAGS=required fails the run when it does not.
 
 from __future__ import annotations
 
+import datetime as dt
 import json
 import os
 import re
@@ -33,12 +34,14 @@ import jinja2
 import pytest
 
 from dbt_s_layer.duckdb_views import render_duckdb
+from dbt_s_layer.exports import render_exports
 from dbt_s_layer.project import load_project
 from dbt_s_layer.semantic_views import build_semantic_views
 from tests.conftest import ARTIFACTS, DUCKDB_SETS
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
+    from pathlib import Path
 
     from tests.conftest import MakeProject
 
@@ -49,6 +52,8 @@ duckdb = pytest.importorskip("duckdb")
 _TAG_RE = re.compile(r"(\w+) = '((?:[^']|'')*)'")
 # Members with an `s_layer` block a view leaves out: a joined table's key entity.
 SKIPPED_TAGGED = {"order_items": 1}
+# Rows in each view's own table in the DuckDB fixture.
+BASE_ROWS = {"customers": 3, "orders": 6, "order_items": 6, "stores": 2}
 _MEMBER_RE = re.compile(r"^  (PRIVATE )?(?:[a-z_][a-z0-9_]*\.)?([a-z_][a-z0-9_]*)\b")
 
 
@@ -194,35 +199,145 @@ def test_every_member_of_every_view_answers(
         dimensions, metrics = _members(body)
         assert dimensions or metrics, view.name
         if dimensions:
-            assert len(_query(con, name, dimensions, [])) == 1, view.name
+            # Every dimension, the key included: one row per row of the view's own table, so
+            # a join that drops or fans out rows changes the count.
+            assert len(_query(con, name, dimensions, [])) == BASE_ROWS[view.name], view.name
         for metric in metrics:
             assert _query(con, name, [], [metric]), (view.name, metric)
             if dimensions:
                 assert _query(con, name, dimensions, [metric]), (view.name, metric)
 
 
+def _create_views(
+    con: Any, project: Path, relations: dict[tuple[str, Any], str], *, tags: bool
+) -> None:
+    """CREATE the orders and order_items views as sem__orders and sem__order_items."""
+    views = {v.name: v for v in build_semantic_views(load_project(project), adapter="duckdb").views}
+    for name in ("orders", "order_items"):
+        sql = _sql(render_duckdb(views[name]).body, relations, tags=tags)
+        con.execute(f"CREATE OR REPLACE SEMANTIC VIEW sem__{name} AS {sql}")
+
+
 @pytest.mark.parametrize("set_name", DUCKDB_SETS)
 def test_the_numbers(set_name: str, connection: Any, tags: bool, make_project: MakeProject) -> None:
+    """
+    Metrics by country and month, worked out by hand from the fixture's rows.
+
+    gb has orders 1 (10.00, paid) and 3 (7.50, returned) in January and 4 (40.00) in
+    February; fr has 2 (25.00) in January and 5 (12.50) in February. Order 6 (5.00, in
+    February) has a customer missing from customers, so its country is NULL. Order 1 has
+    two items.
+    """
     con = connection
-    relations = _build_models(con, set_name)
-    views = {
-        v.name: v
-        for v in build_semantic_views(load_project(make_project(set_name)), adapter="duckdb").views
-    }
-    for name in ("orders", "order_items"):
-        body = render_duckdb(views[name]).body
-        sql = _sql(body, relations, tags=tags)
-        con.execute(f"CREATE OR REPLACE SEMANTIC VIEW sem__{name} AS {sql}")
+    _create_views(con, make_project(set_name), _build_models(con, set_name), tags=tags)
     orders = _query(
         con,
         "sem__orders",
         ["customer__country", "order_month"],
-        ["revenue", "paid_revenue", "average_order_value", "revenue_doubled"],
+        ["revenue", "paid_revenue", "order_count", "average_order_value", "revenue_doubled"],
     )
-    assert [(c, float(r), float(p), float(a), float(d)) for c, _, r, p, a, d in orders] == [
-        ("gb", 10.0, 10.0, 10.0, 20.0)
+    assert sorted(
+        (
+            (c, m.month, float(r), float(p), int(n), float(a), float(d))
+            for c, m, r, p, n, a, d in orders
+        ),
+        key=str,
+    ) == [
+        ("fr", 1, 25.0, 25.0, 1, 25.0, 50.0),
+        ("fr", 2, 12.5, 12.5, 1, 12.5, 25.0),
+        ("gb", 1, 17.5, 10.0, 2, 8.75, 35.0),
+        ("gb", 2, 40.0, 40.0, 1, 40.0, 80.0),
+        (None, 2, 5.0, 5.0, 1, 5.0, 10.0),
     ]
     items = _query(
         con, "sem__order_items", ["order__customer__country", "ordered_at"], ["items_sold"]
     )
-    assert [(country, int(sold)) for country, _, sold in items] == [("gb", 2)]
+    assert sorted(
+        ((country, day.isoformat(), int(sold)) for country, day, sold in items), key=str
+    ) == [
+        ("fr", "2024-01-10", 4),
+        ("fr", "2024-02-15", 1),
+        ("gb", "2024-01-03", 3),
+        ("gb", "2024-02-02", 3),
+        (None, "2024-02-20", 2),
+    ]
+
+
+# Each saved query's export, as a query of the generated semantic view: (view, dimensions,
+# metrics), with the columns in the export's order. A saved query's `where` on a dimension
+# becomes (dimension, value): the view groups by it too, and the rows that match are summed.
+# (where_clause would say it directly, but extension 0.11, in dbt Fusion, has none.)
+SAVED_QUERY_AS_VIEW_QUERY: dict[str, tuple[str, list[str], list[str], tuple[str, str] | None]] = {
+    "revenue_by_day": ("sem__orders", ["ordered_at"], ["revenue"], None),
+    "revenue_by_region_country": (
+        "sem__orders",
+        ["customer__country", "store__region"],
+        ["revenue"],
+        ("status", "paid"),
+    ),
+    "items_by_country": ("sem__order_items", ["order__customer__country"], ["items_sold"], None),
+}
+# A cumulative metric has no semantic-view form: its oracle is the view's daily revenue
+# summed over every day up to each day of the time spine.
+CUMULATIVE_FROM_VIEW = """
+    SELECT spine.date_day, SUM(daily.revenue)
+    FROM {spine} AS spine
+    JOIN semantic_view('sem__orders', dimensions := ['ordered_at'], metrics := ['revenue'])
+        AS daily ON daily.ordered_at <= spine.date_day
+    GROUP BY spine.date_day
+"""
+
+
+def _rows(rows: list[tuple[Any, ...]]) -> list[tuple[Any, ...]]:
+    """Rows in a comparable form: a midnight timestamp is its date, sorted."""
+
+    def value(v: Any) -> Any:
+        if isinstance(v, dt.datetime):
+            assert v.time() == dt.time(0), v
+            return v.date()
+        return v
+
+    return sorted((tuple(value(v) for v in row) for row in rows), key=repr)
+
+
+@pytest.mark.parametrize("set_name", DUCKDB_SETS)
+def test_exports_agree_with_the_semantic_views(
+    set_name: str, connection: Any, tags: bool, make_project: MakeProject
+) -> None:
+    """
+    Every saved-query export, run on DuckDB, returns what the semantic views return.
+
+    The exports are SQL MetricFlow writes; the views are SQL the extension writes from the
+    view definitions dbt-s-layer generates. Two independent compilers of the same YAML must
+    agree on the numbers, row for row.
+    """
+    con = connection
+    relations = _build_models(con, set_name)
+    project = make_project(set_name)
+    _create_views(con, project, relations, tags=tags)
+    exports = render_exports(load_project(project), adapter="duckdb", jobs=1)
+    assert {e.saved_query for e in exports} == {*SAVED_QUERY_AS_VIEW_QUERY, "cumulative_revenue"}
+    for export in exports:
+        actual = _rows(con.execute(_sql(export.body, relations, tags=tags)).fetchall())
+        assert len(actual) > 1, export.file_name
+        if export.saved_query == "cumulative_revenue":
+            spine = relations[("metricflow_time_spine", None)]
+            expected = _rows(con.execute(CUMULATIVE_FROM_VIEW.format(spine=spine)).fetchall())
+        else:
+            view, dimensions, metrics, where = SAVED_QUERY_AS_VIEW_QUERY[export.saved_query]
+            if where is None:
+                expected = _rows(_query(con, view, dimensions, metrics))
+            else:
+                # The view's columns: the dimensions, the filtered one, then the metrics. Every
+                # metric here sums, so the matching groups add up.
+                n = len(dimensions)
+                sums: dict[tuple[Any, ...], list[Any]] = {}
+                for row in _query(con, view, [*dimensions, where[0]], metrics):
+                    if row[n] == where[1]:
+                        key, values = tuple(row[:n]), row[n + 1 :]
+                        sums[key] = [
+                            a + b
+                            for a, b in zip(sums.get(key, [0] * len(values)), values, strict=True)
+                        ]
+                expected = _rows([(*key, *values) for key, values in sums.items()])
+        assert actual == expected, export.file_name
