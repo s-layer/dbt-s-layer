@@ -178,7 +178,9 @@ Architecture not yet mapped. Follow existing patterns found in the codebase.
 <!-- GSD:skills-start source:skills/ -->
 ## Project Skills
 
-No project skills found. Add skills to any of: `.claude/skills/`, `.agents/skills/`, `.cursor/skills/`, or `.github/skills/` with a `SKILL.md` index file.
+- `.claude/skills/verify/SKILL.md`: the commands that prove a change works end to end. Run them before saying a change is done.
+
+REVIEW.md holds the review rules: what to look for, severity tags and diff-triggered checks.
 <!-- GSD:skills-end -->
 
 <!-- GSD:workflow-start source:GSD defaults -->
