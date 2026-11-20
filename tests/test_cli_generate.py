@@ -16,7 +16,7 @@ from dbt_s_layer.project import load_project
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from click.testing import Result
+    from typer.testing import Result
 
     from tests.conftest import MakeProject
 

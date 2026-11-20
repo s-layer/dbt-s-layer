@@ -21,7 +21,7 @@ from dbt_s_layer.cli import app
 from tests.conftest import ARTIFACTS
 
 if TYPE_CHECKING:
-    from click.testing import Result
+    from typer.testing import Result
 
     from dbt_s_layer._doctor import Detection
     from tests.conftest import MakeProject
